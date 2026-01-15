@@ -12,28 +12,35 @@ const myappAPI = {
   getStaticFields: () => ipcRenderer.invoke("getStaticFields"),
   getCustomFields: () => ipcRenderer.invoke("getCustomFields"),
   addCustomField: (field) => ipcRenderer.invoke("addCustomField", field),
-deleteField: (id) => ipcRenderer.invoke("deleteField", id),
-    saveFieldVisibility: (id, visible) => ipcRenderer.invoke("saveFieldVisibility", id, visible),
+  deleteField: (id) => ipcRenderer.invoke("deleteField", id),
+  saveFieldVisibility: (id, visible) =>
+    ipcRenderer.invoke("saveFieldVisibility", id, visible),
   uploadStaticFieldsToSupabase: (fieldsData) =>
     ipcRenderer.invoke("uploadStaticFieldsToSupabase", fieldsData),
 
   // Issues
   getAllIssues: (projectId) => ipcRenderer.invoke("getAllIssues", projectId),
-  createIssue: (projectId, issueData) => ipcRenderer.invoke("createIssue", projectId, issueData),
-    // window.myappAPI.updateIssue(issueId, issueData)
-    updateIssue: (issueId, issueData) => ipcRenderer.invoke("updateIssue", issueId, issueData),
+  createIssue: (projectId, issueData) =>
+    ipcRenderer.invoke("createIssue", projectId, issueData),
+  // window.myappAPI.updateIssue(issueId, issueData)
+  updateIssue: (issueId, issueData) =>
+    ipcRenderer.invoke("updateIssue", issueId, issueData),
   getIssueById: (id) => ipcRenderer.invoke("getIssueById", id),
-  queryIssues: (projectId, filters) => ipcRenderer.invoke("queryIssues", projectId, filters),
+  queryIssues: (projectId, filters) =>
+    ipcRenderer.invoke("queryIssues", projectId, filters),
 
-    // window.myappAPI.createProject(name, description);
-    createProject: (name, description) => ipcRenderer.invoke("createProject", name, description),
-    getAllProjects: () => ipcRenderer.invoke("getAllProjects"),
+  // window.myappAPI.createProject(name, description);
+  createProject: (name, description) =>
+    ipcRenderer.invoke("createProject", name, description),
+  getAllProjects: () => ipcRenderer.invoke("getAllProjects"),
   selectFolder: () => ipcRenderer.invoke("selectFolder"),
+    selectImageFile: () => ipcRenderer.invoke("selectImageFile"),
   selectExcelFile: () => ipcRenderer.invoke("selectExcelFile"),
   previewExcel: (filePath) => ipcRenderer.invoke("previewExcel", filePath),
   // Import and process an Excel file on the main process (returns summary)
   importExcel: (projectId, filePath, mapping) =>
     ipcRenderer.invoke("importExcel", projectId, filePath, mapping),
+  listPhotos: (dirPath) => ipcRenderer.invoke("listPhotos", dirPath),
 };
 
 contextBridge.exposeInMainWorld("myappAPI", myappAPI);

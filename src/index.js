@@ -182,6 +182,22 @@ ipcMain.handle('selectFolder', async () => {
   }
 })
 
+ipcMain.handle('selectImageFile', async () => {
+  try {
+    const result = await dialog.showOpenDialog({
+      properties: ['openFile'],
+      filters: [
+        { name: 'Images', extensions: ['jpg', 'jpeg', 'png', 'gif', 'heic', 'webp', 'tiff'] },
+      ],
+    })
+    if (result.canceled) return null
+    return Array.isArray(result.filePaths) && result.filePaths.length > 0 ? result.filePaths[0] : null
+  } catch (err) {
+    console.error('[main] selectImageFile', err)
+    return null
+  }
+})
+
 
 // Choose an Excel file on disk (returns path or null)
 ipcMain.handle('selectExcelFile', async () => {
@@ -302,3 +318,25 @@ ipcMain.handle('importExcel', async (_event, projectId, filePath, mapping) => {
   }
 })
 
+ipcMain.handle('listPhotos', async (_event, dirPath) => {
+  try {
+    if (!dirPath || typeof dirPath !== 'string') return []
+    const full = dirPath
+    // Ensure directory exists
+    if (!fs.existsSync(full)) return []
+    const stat = fs.statSync(full)
+    if (!stat.isDirectory()) return []
+
+    const entries = fs.readdirSync(full)
+    const imageExt = /\.(jpe?g|png|gif|heic|webp|tiff?)$/i
+    const files = entries
+      .filter((f) => imageExt.test(f))
+      .map((f) => path.join(full, f))
+
+      console.log(JSON.stringify(files, null, 2))
+    return files
+  } catch (err) {
+    console.error('[main] listPhotos', err)
+    return []
+  }
+})
