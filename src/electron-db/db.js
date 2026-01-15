@@ -21,6 +21,14 @@ const db = new Database(dbFile);
 // Initialize tables
 db.pragma("journal_mode = WAL");
 
+//create table if not exists public.projects (
+//  id bigint primary key generated always as identity,
+//  name text not null,
+//  description text,
+//  created_at timestamp without time zone default timezone('utc'::text, now()),
+//  updated_at timestamp without time zone default timezone('utc'::text, now())
+//);
+
 db.exec(
   `CREATE TABLE IF NOT EXISTS fields (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -31,12 +39,16 @@ db.exec(
         static BOOLEAN DEFAULT FALSE,
         options TEXT,
         placeholder TEXT,
+      index_order INTEGER DEFAULT 0,
+      visible BOOLEAN DEFAULT TRUE,
+      exportable BOOLEAN DEFAULT TRUE,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
     CREATE TABLE IF NOT EXISTS issues (
   id TEXT PRIMARY KEY,
+project_id INTEGER,
   data TEXT NOT NULL,
   created_at TEXT,
   updated_at TEXT
@@ -58,6 +70,14 @@ CREATE INDEX IF NOT EXISTS idx_issue_index_field_number ON issue_index(field_nam
 CREATE INDEX IF NOT EXISTS idx_issue_index_issue ON issue_index(issue_id);
 
 
+--- Projects table.
+CREATE TABLE IF NOT EXISTS projects (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  description TEXT,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
     `,
 );
 
@@ -66,8 +86,6 @@ try {
         BEGIN TRANSACTION;
 
 INSERT INTO fields (name, label, type, required, static, options, placeholder) VALUES
-('project_name', 'Project Name', 'text', 0, 1, NULL, NULL),
-('business_name', 'Business Name', 'text', 0, 1, NULL, NULL),
 ('inspection_type', 'Inspection Type', 'text', 0, 1, NULL, NULL),
 ('inspection_date', 'Inspection Date', 'date', 0, 1, NULL, NULL),
 ('inspector', 'Inspector', 'text', 0, 1, NULL, NULL),
@@ -79,8 +97,8 @@ INSERT INTO fields (name, label, type, required, static, options, placeholder) V
 ('phase', 'Phase', 'text', 0, 1, NULL, NULL),
 ('plan_type', 'Plan Type', 'text', 0, 1, NULL, NULL),
 ('design_type', 'Design Type', 'text', 0, 1, NULL, NULL),
-('ppt', 'PPT', 'text', 0, 1, NULL, NULL),
-('exemplar', 'Exemplar', 'text', 0, 1, NULL, NULL),
+('ppt', 'PPT', 'boolean', 0, 1, NULL, NULL),
+('exemplar', 'boolean', 'text', 0, 1, NULL, NULL),
 ('issue', 'Issue', 'textarea', 0, 1, NULL, NULL),
 ('cladding', 'Cladding', 'text', 0, 1, NULL, NULL),
 ('component', 'Component', 'text', 0, 1, NULL, NULL),

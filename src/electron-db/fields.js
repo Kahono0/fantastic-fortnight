@@ -18,6 +18,8 @@ function rowToField(row) {
     placeholder: row.placeholder,
     created_at: row.created_at,
     updated_at: row.updated_at,
+    visible: row.visible === undefined ? true : !!row.visible,
+    exportable: row.exportable === undefined ? true : !!row.exportable,
   }
 }
 
@@ -41,13 +43,11 @@ exports.getCustomFields = function () {
 
 exports.addCustomField = function (field) {
   try {
-    const id = uuidv4()
     const created = nowISO()
-    const insert = db.prepare(`INSERT INTO fields (id, name, label, type, required, static, options, placeholder, created_at, updated_at)
-      VALUES (@id, @name, @label, @type, @required, @static, @options, @placeholder, @created_at, @updated_at)`)
+    const insert = db.prepare(`INSERT INTO fields (name, label, type, required, static, options, placeholder, created_at, updated_at)
+      VALUES (@name, @label, @type, @required, @static, @options, @placeholder, @created_at, @updated_at)`)
 
     const info = insert.run({
-      id,
       name: field.name,
       label: field.label || field.name,
       type: field.type || 'text',
@@ -60,7 +60,8 @@ exports.addCustomField = function (field) {
     })
 
     if (info.changes) {
-      return exports.getCustomFieldById(id)
+        const row = db.prepare('SELECT * FROM fields WHERE id = ?').get(info.lastInsertRowid)
+        return rowToField(row)
     }
 
     return null
@@ -74,6 +75,28 @@ exports.getCustomFieldById = function (id) {
   const stmt = db.prepare('SELECT * FROM fields WHERE id = ?')
   const row = stmt.get(id)
   return rowToField(row)
+}
+
+exports.deleteField = function (id) {
+  try {
+    const del = db.prepare('DELETE FROM fields WHERE id = ?')
+    const info = del.run(id)
+    return info.changes > 0
+  } catch (err) {
+    console.error('[electron-db] deleteField error', err)
+    return false
+  }
+}
+
+exports.saveFieldVisibility = function (id, visible) {
+  try {
+    const update = db.prepare('UPDATE fields SET visible = ?, updated_at = ? WHERE id = ?')
+    const info = update.run(visible ? 1 : 0, nowISO(), id)
+    return info.changes > 0
+  } catch (err) {
+    console.error('[electron-db] saveFieldVisibility error', err)
+    return false
+  }
 }
 
 exports.uploadStaticFieldsToSupabase = function (fieldsData) {

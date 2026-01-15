@@ -6,6 +6,7 @@ const xlsx = require('xlsx')
 // Load DB-backed modules
 const fieldsDb = require("./electron-db/fields");
 const issuesDb = require("./electron-db/issues");
+const projectsDb = require("./electron-db/projects");
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -74,6 +75,15 @@ ipcMain.handle("addCustomField", async (_event, field) => {
   }
 });
 
+ipcMain.handle("deleteField", async (_event, id) => {
+  try {
+    return fieldsDb.deleteField(id);
+  } catch (err) {
+    console.error("[main] deleteField", err);
+    return false;
+  }
+});
+
 ipcMain.handle("uploadStaticFieldsToSupabase", async (_event, fieldsData) => {
   try {
     return fieldsDb.uploadStaticFieldsToSupabase(fieldsData);
@@ -82,21 +92,40 @@ ipcMain.handle("uploadStaticFieldsToSupabase", async (_event, fieldsData) => {
   }
 });
 
-// Issues
-ipcMain.handle("getAllIssues", async () => {
+ipcMain.handle("saveFieldVisibility", async (_event, id, visible) => {
   try {
-    return issuesDb.getAllIssues();
+    return fieldsDb.saveFieldVisibility(id, visible);
+  } catch (err) {
+    console.error("[main] saveFieldVisibility", err);
+    return false;
+  }
+});
+
+// Issues
+ipcMain.handle("getAllIssues", async (_event, projectId) => {
+  try {
+    return issuesDb.getAllIssues(projectId);
   } catch (err) {
     console.error("[main] getAllIssues", err);
     return [];
   }
 });
 
-ipcMain.handle("createIssue", async (_event, issueData) => {
+ipcMain.handle("createIssue", async (_event,projectId, issueData) => {
   try {
-    return issuesDb.createIssue(issueData);
+    return issuesDb.createIssue(projectId, issueData);
   } catch (err) {
     console.error("[main] createIssue", err);
+    return null;
+  }
+});
+
+// window.myappAPI.updateIssue(issueId, issueData)
+ipcMain.handle("updateIssue", async (_event, issueId, issueData) => {
+  try {
+    return issuesDb.updateIssue(issueId, issueData);
+  } catch (err) {
+    console.error("[main] updateIssue", err);
     return null;
   }
 });
@@ -111,14 +140,34 @@ ipcMain.handle("getIssueById", async (_event, id) => {
 });
 
 
-ipcMain.handle('queryIssues', async (_event, filters) => {
+ipcMain.handle('queryIssues', async (_event, projectId, filters) => {
   try {
-    return issuesDb.queryIssues(filters)
+    return issuesDb.queryIssues(projectId, filters)
   } catch (err) {
     console.error('[main] queryIssues', err)
     return []
   }
 })
+
+// window.myappAPI.createProject(name, description);
+ipcMain.handle("createProject", async (_event, name, description) => {
+    try {
+        return projectsDb.createProject(name, description);
+    } catch (err) {
+        console.error("[main] createProject", err);
+        return null;
+    }
+});
+
+// window.myappAPI.getAllProjects();
+ipcMain.handle("getAllProjects", async () => {
+    try {
+        return projectsDb.getAllProjects();
+    } catch (err) {
+        console.error("[main] getAllProjects", err);
+        return [];
+    }
+});
 
 ipcMain.handle('selectFolder', async () => {
   try {
@@ -171,7 +220,7 @@ ipcMain.handle('previewExcel', async (_event, filePath) => {
 // Import Excel file: parse and create issues in the local DB. Returns { imported: n, errors: [...] }
 // Import Excel file: parse and create issues in the local DB. Returns { imported: n, errors: [...] }
 // Accepts optional mapping: { [headerName]: destinationFieldName | "" }
-ipcMain.handle('importExcel', async (_event, filePath, mapping) => {
+ipcMain.handle('importExcel', async (_event, projectId, filePath, mapping) => {
   try {
     if (!filePath || typeof filePath !== 'string') throw new Error('Invalid file path')
 
@@ -183,7 +232,6 @@ ipcMain.handle('importExcel', async (_event, filePath, mapping) => {
     const sheetName = workbook.SheetNames[0]
     const sheet = workbook.Sheets[sheetName]
     const rows = xlsx.utils.sheet_to_json(sheet, { defval: null })
-    console.log(JSON.stringify(rows, null, 2))
     const summary = { imported: 0, errors: [] }
 
     for (const [i, row] of rows.entries()) {
@@ -239,7 +287,7 @@ ipcMain.handle('importExcel', async (_event, filePath, mapping) => {
         }
 
         // Create issue in local DB
-        await issuesDb.createIssue(issueData)
+        await issuesDb.createIssue(projectId, issueData)
         summary.imported += 1
       } catch (err) {
         console.error('[main] importExcel row error', err)
