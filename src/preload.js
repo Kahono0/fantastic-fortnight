@@ -41,6 +41,8 @@ const myappAPI = {
   importExcel: (projectId, filePath, mapping) =>
     ipcRenderer.invoke("importExcel", projectId, filePath, mapping),
   listPhotos: (dirPath) => ipcRenderer.invoke("listPhotos", dirPath),
+    exportPdf: () => ipcRenderer.invoke('exportPdf'),
+    printToPDF: (options) => ipcRenderer.invoke('printToPDF', options),
 };
 
 contextBridge.exposeInMainWorld("myappAPI", myappAPI);

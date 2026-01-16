@@ -1,7 +1,7 @@
-const { app, BrowserWindow, ipcMain, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog } = require("electron");
 const path = require("path");
-const fs = require('fs')
-const xlsx = require('xlsx')
+const fs = require("fs");
+const xlsx = require("xlsx");
 
 // Load DB-backed modules
 const fieldsDb = require("./electron-db/fields");
@@ -111,7 +111,7 @@ ipcMain.handle("getAllIssues", async (_event, projectId) => {
   }
 });
 
-ipcMain.handle("createIssue", async (_event,projectId, issueData) => {
+ipcMain.handle("createIssue", async (_event, projectId, issueData) => {
   try {
     return issuesDb.createIssue(projectId, issueData);
   } catch (err) {
@@ -139,204 +139,277 @@ ipcMain.handle("getIssueById", async (_event, id) => {
   }
 });
 
-
-ipcMain.handle('queryIssues', async (_event, projectId, filters) => {
+ipcMain.handle("queryIssues", async (_event, projectId, filters) => {
   try {
-    return issuesDb.queryIssues(projectId, filters)
+    return issuesDb.queryIssues(projectId, filters);
   } catch (err) {
-    console.error('[main] queryIssues', err)
-    return []
+    console.error("[main] queryIssues", err);
+    return [];
   }
-})
+});
 
 // window.myappAPI.createProject(name, description);
 ipcMain.handle("createProject", async (_event, name, description) => {
-    try {
-        return projectsDb.createProject(name, description);
-    } catch (err) {
-        console.error("[main] createProject", err);
-        return null;
-    }
+  try {
+    return projectsDb.createProject(name, description);
+  } catch (err) {
+    console.error("[main] createProject", err);
+    return null;
+  }
 });
 
 // window.myappAPI.getAllProjects();
 ipcMain.handle("getAllProjects", async () => {
-    try {
-        return projectsDb.getAllProjects();
-    } catch (err) {
-        console.error("[main] getAllProjects", err);
-        return [];
-    }
+  try {
+    return projectsDb.getAllProjects();
+  } catch (err) {
+    console.error("[main] getAllProjects", err);
+    return [];
+  }
 });
 
-ipcMain.handle('selectFolder', async () => {
+ipcMain.handle("selectFolder", async () => {
   try {
     const result = await dialog.showOpenDialog({
-      properties: ['openDirectory'],
-    })
-    if (result.canceled) return null
-    return Array.isArray(result.filePaths) && result.filePaths.length > 0 ? result.filePaths[0] : null
+      properties: ["openDirectory"],
+    });
+    if (result.canceled) return null;
+    return Array.isArray(result.filePaths) && result.filePaths.length > 0
+      ? result.filePaths[0]
+      : null;
   } catch (err) {
-    console.error('[main] selectFolder', err)
-    return null
+    console.error("[main] selectFolder", err);
+    return null;
   }
-})
+});
 
-ipcMain.handle('selectImageFile', async () => {
+ipcMain.handle("selectImageFile", async () => {
   try {
     const result = await dialog.showOpenDialog({
-      properties: ['openFile'],
+      properties: ["openFile"],
       filters: [
-        { name: 'Images', extensions: ['jpg', 'jpeg', 'png', 'gif', 'heic', 'webp', 'tiff'] },
+        {
+          name: "Images",
+          extensions: ["jpg", "jpeg", "png", "gif", "heic", "webp", "tiff"],
+        },
       ],
-    })
-    if (result.canceled) return null
-    return Array.isArray(result.filePaths) && result.filePaths.length > 0 ? result.filePaths[0] : null
+    });
+    if (result.canceled) return null;
+    return Array.isArray(result.filePaths) && result.filePaths.length > 0
+      ? result.filePaths[0]
+      : null;
   } catch (err) {
-    console.error('[main] selectImageFile', err)
-    return null
+    console.error("[main] selectImageFile", err);
+    return null;
   }
-})
-
+});
 
 // Choose an Excel file on disk (returns path or null)
-ipcMain.handle('selectExcelFile', async () => {
+ipcMain.handle("selectExcelFile", async () => {
   try {
     const result = await dialog.showOpenDialog({
-      properties: ['openFile'],
-      filters: [
-        { name: 'Excel', extensions: ['xlsx', 'xls', 'csv'] },
-      ],
-    })
-    if (result.canceled) return null
-    return Array.isArray(result.filePaths) && result.filePaths.length > 0 ? result.filePaths[0] : null
+      properties: ["openFile"],
+      filters: [{ name: "Excel", extensions: ["xlsx", "xls", "csv"] }],
+    });
+    if (result.canceled) return null;
+    return Array.isArray(result.filePaths) && result.filePaths.length > 0
+      ? result.filePaths[0]
+      : null;
   } catch (err) {
-    console.error('[main] selectExcelFile', err)
-    return null
+    console.error("[main] selectExcelFile", err);
+    return null;
   }
-})
+});
 
-ipcMain.handle('previewExcel', async (_event, filePath) => {
+ipcMain.handle("previewExcel", async (_event, filePath) => {
   try {
-    if (!filePath || typeof filePath !== 'string') throw new Error('Invalid file path')
-    const buf = fs.readFileSync(filePath)
-    const workbook = xlsx.read(buf, { type: 'buffer' })
-    const sheetName = workbook.SheetNames[0]
-    const sheet = workbook.Sheets[sheetName]
-    const rows = xlsx.utils.sheet_to_json(sheet, { defval: null })
-    const headers = rows && rows.length > 0 ? Object.keys(rows[0]) : []
-    const sample = rows.slice(0, 5)
-    return { headers, sample }
+    if (!filePath || typeof filePath !== "string")
+      throw new Error("Invalid file path");
+    const buf = fs.readFileSync(filePath);
+    const workbook = xlsx.read(buf, { type: "buffer" });
+    const sheetName = workbook.SheetNames[0];
+    const sheet = workbook.Sheets[sheetName];
+    const rows = xlsx.utils.sheet_to_json(sheet, { defval: null });
+    const headers = rows && rows.length > 0 ? Object.keys(rows[0]) : [];
+    const sample = rows.slice(0, 5);
+    return { headers, sample };
   } catch (err) {
-    console.error('[main] previewExcel', err)
-    return { headers: [], sample: [], error: String(err) }
+    console.error("[main] previewExcel", err);
+    return { headers: [], sample: [], error: String(err) };
   }
-})
+});
 
 // Import Excel file: parse and create issues in the local DB. Returns { imported: n, errors: [...] }
 // Import Excel file: parse and create issues in the local DB. Returns { imported: n, errors: [...] }
 // Accepts optional mapping: { [headerName]: destinationFieldName | "" }
-ipcMain.handle('importExcel', async (_event, projectId, filePath, mapping) => {
+ipcMain.handle("importExcel", async (_event, projectId, filePath, mapping) => {
   try {
-    if (!filePath || typeof filePath !== 'string') throw new Error('Invalid file path')
+    if (!filePath || typeof filePath !== "string")
+      throw new Error("Invalid file path");
 
     // Read file buffer
-    const buf = fs.readFileSync(filePath)
+    const buf = fs.readFileSync(filePath);
 
     // Parse with SheetJS
-    const workbook = xlsx.read(buf, { type: 'buffer' })
-    const sheetName = workbook.SheetNames[0]
-    const sheet = workbook.Sheets[sheetName]
-    const rows = xlsx.utils.sheet_to_json(sheet, { defval: null })
-    const summary = { imported: 0, errors: [] }
+    const workbook = xlsx.read(buf, { type: "buffer" });
+    const sheetName = workbook.SheetNames[0];
+    const sheet = workbook.Sheets[sheetName];
+    const rows = xlsx.utils.sheet_to_json(sheet, { defval: null });
+    const summary = { imported: 0, errors: [] };
 
     for (const [i, row] of rows.entries()) {
       try {
         // Build issueData using mapping if provided, otherwise copy all columns with normalized keys
-        const issueData = {}
-        if (mapping && typeof mapping === 'object') {
+        const issueData = {};
+        if (mapping && typeof mapping === "object") {
           // Build a normalized lookup map for this row so header variations map to the actual value.
           // Use a single normalization function for keys so mapping lookup is stable.
           const normalizeKey = (s = "") =>
             String(s || "")
-              .replace(/\uFEFF/g, '') // remove BOM
-              .replace(/\r\n|\r|\n/g, ' ') // normalize newlines to spaces
+              .replace(/\uFEFF/g, "") // remove BOM
+              .replace(/\r\n|\r|\n/g, " ") // normalize newlines to spaces
               .trim()
               .toLowerCase()
-              .replace(/^[^a-z0-9]+|[^a-z0-9]+$/g, '')
-              .replace(/[^a-z0-9]+/g, '_')
+              .replace(/^[^a-z0-9]+|[^a-z0-9]+$/g, "")
+              .replace(/[^a-z0-9]+/g, "_");
 
-          const normalizedRowMap = new Map()
+          const normalizedRowMap = new Map();
           for (const origKey of Object.keys(row)) {
-            const val = row[origKey]
-            const norm = normalizeKey(origKey)
+            const val = row[origKey];
+            const norm = normalizeKey(origKey);
             // store both normalized and trimmed forms to maximize hit rate
-            normalizedRowMap.set(norm, val)
-            normalizedRowMap.set(String(origKey).trim().toLowerCase(), val)
-            normalizedRowMap.set(String(origKey), val)
+            normalizedRowMap.set(norm, val);
+            normalizedRowMap.set(String(origKey).trim().toLowerCase(), val);
+            normalizedRowMap.set(String(origKey), val);
           }
 
           for (const [hdr, dest] of Object.entries(mapping)) {
-            if (!dest) continue
-            const hdrNorm = normalizeKey(hdr)
-            const hdrTrim = String(hdr).trim().toLowerCase()
-            let val = undefined
-            if (normalizedRowMap.has(hdrNorm)) val = normalizedRowMap.get(hdrNorm)
-            else if (normalizedRowMap.has(hdrTrim)) val = normalizedRowMap.get(hdrTrim)
-            else if (normalizedRowMap.has(hdr)) val = normalizedRowMap.get(hdr)
+            if (!dest) continue;
+            const hdrNorm = normalizeKey(hdr);
+            const hdrTrim = String(hdr).trim().toLowerCase();
+            let val = undefined;
+            if (normalizedRowMap.has(hdrNorm))
+              val = normalizedRowMap.get(hdrNorm);
+            else if (normalizedRowMap.has(hdrTrim))
+              val = normalizedRowMap.get(hdrTrim);
+            else if (normalizedRowMap.has(hdr)) val = normalizedRowMap.get(hdr);
             else {
               // fallback: try alternate transforms
-              const alt = String(hdr).replace(/[^a-zA-Z0-9]+/g, ' ').trim().toLowerCase()
-              const alt2 = alt.replace(/\s+/g, '_')
-              if (normalizedRowMap.has(alt)) val = normalizedRowMap.get(alt)
-              else if (normalizedRowMap.has(alt2)) val = normalizedRowMap.get(alt2)
+              const alt = String(hdr)
+                .replace(/[^a-zA-Z0-9]+/g, " ")
+                .trim()
+                .toLowerCase();
+              const alt2 = alt.replace(/\s+/g, "_");
+              if (normalizedRowMap.has(alt)) val = normalizedRowMap.get(alt);
+              else if (normalizedRowMap.has(alt2))
+                val = normalizedRowMap.get(alt2);
             }
-            issueData[dest] = val
+            issueData[dest] = val;
           }
         } else {
           for (const key of Object.keys(row)) {
-            const k = String(key).trim()
-            if (!k) continue
-            const nk = k.replace(/\s+/g, '_').toLowerCase()
-            issueData[nk] = row[key]
+            const k = String(key).trim();
+            if (!k) continue;
+            const nk = k.replace(/\s+/g, "_").toLowerCase();
+            issueData[nk] = row[key];
           }
         }
 
         // Create issue in local DB
-        await issuesDb.createIssue(projectId, issueData)
-        summary.imported += 1
+        await issuesDb.createIssue(projectId, issueData);
+        summary.imported += 1;
       } catch (err) {
-        console.error('[main] importExcel row error', err)
-        summary.errors.push({ row: i + 1, error: String(err) })
+        console.error("[main] importExcel row error", err);
+        summary.errors.push({ row: i + 1, error: String(err) });
       }
     }
 
-    return summary
+    return summary;
   } catch (err) {
-    console.error('[main] importExcel', err)
-    return { imported: 0, errors: [{ error: String(err) }] }
+    console.error("[main] importExcel", err);
+    return { imported: 0, errors: [{ error: String(err) }] };
   }
-})
+});
 
-ipcMain.handle('listPhotos', async (_event, dirPath) => {
+ipcMain.handle("listPhotos", async (_event, dirPath) => {
   try {
-    if (!dirPath || typeof dirPath !== 'string') return []
-    const full = dirPath
+    if (!dirPath || typeof dirPath !== "string") return [];
+    const full = dirPath;
     // Ensure directory exists
-    if (!fs.existsSync(full)) return []
-    const stat = fs.statSync(full)
-    if (!stat.isDirectory()) return []
+    if (!fs.existsSync(full)) return [];
+    const stat = fs.statSync(full);
+    if (!stat.isDirectory()) return [];
 
-    const entries = fs.readdirSync(full)
-    const imageExt = /\.(jpe?g|png|gif|heic|webp|tiff?)$/i
+    const entries = fs.readdirSync(full);
+    const imageExt = /\.(jpe?g|png|gif|heic|webp|tiff?)$/i;
     const files = entries
       .filter((f) => imageExt.test(f))
-      .map((f) => path.join(full, f))
+      .map((f) => path.join(full, f));
 
-      console.log(JSON.stringify(files, null, 2))
-    return files
+    console.log(JSON.stringify(files, null, 2));
+    return files;
   } catch (err) {
-    console.error('[main] listPhotos', err)
-    return []
+    console.error("[main] listPhotos", err);
+    return [];
   }
-})
+});
+
+ipcMain.handle("printToPDF", async (event, options) => {
+  try {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (!win) throw new Error("No focused window to print from");
+      const filename = options && options.filename ? options.filename : "report.pdf";
+      delete options.filename;
+    const pdfOptions = {
+      printBackground: true,
+      marginsType: 0,
+      pageSize: "A4",
+      scaleFactor: 200,
+      landscape: false,
+      ...options,
+    };
+
+    const pdfData = await win.webContents.printToPDF(pdfOptions);
+
+      const { canceled, filePath } = await dialog.showSaveDialog(win, {
+        title: "Save PDF",
+        defaultPath: filename,
+        filters: [{ name: "PDF", extensions: ["pdf"] }],
+      });
+
+      if (canceled || !filePath) return { success: false };
+
+      fs.writeFileSync(filePath, pdfData);
+      return { success: true, filePath };
+  } catch (err) {
+    console.error("[main] printToPDF", err);
+    return null;
+  }
+});
+
+ipcMain.handle("exportPdf", async (event) => {
+  try {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (!win) throw new Error("No active window");
+
+    // Generate PDF buffer from the current renderer contents
+    const pdfBuffer = await win.webContents.printToPDF({
+      printBackground: true,
+    });
+
+    // Ask user where to save
+    const { canceled, filePath } = await dialog.showSaveDialog(win, {
+      title: "Save report as PDF",
+      defaultPath: "my_report.pdf",
+      filters: [{ name: "PDF", extensions: ["pdf"] }],
+    });
+
+    if (canceled || !filePath) return { success: false };
+
+    fs.writeFileSync(filePath, pdfBuffer);
+    return { success: true, filePath };
+  } catch (err) {
+    console.error("[main] exportPdf", err);
+    return { success: false, error: String(err) };
+  }
+});
