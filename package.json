@@ -1,8 +1,8 @@
 {
-  "name": "my-app",
-  "productName": "my-app",
+  "name": "issue-db",
+  "productName": "Issue DB",
   "version": "1.0.0",
-  "description": "My Electron application description",
+  "description": "Manage and track issues efficiently with Issue DB, a desktop application built with Electron.",
   "main": "src/index.js",
   "scripts": {
     "start": "electron-forge start",
