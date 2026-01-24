@@ -36,3 +36,14 @@ npm install || { echo "Dependency installation failed"; exit 1; }
 echo "Building the project..."
 npm run make || { echo "Build failed"; exit 1; }
 echo "Installation completed successfully."
+
+echo "Installing the app..."
+# find .app file in out/make directory
+app_path=$(find out -name "*.app" | head -n 1)
+if [ -z "$app_path" ]; then
+    echo "App file not found!"
+    exit 1
+fi
+echo "Found app at $app_path"
+cp -R "$app_path" /Applications/ || { echo "Failed to copy app to Applications"; exit 1; }
+echo "App installed to /Applications successfully."
