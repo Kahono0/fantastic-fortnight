@@ -10,9 +10,9 @@ try {
     "Please install better-sqlite3: `npm install better-sqlite3`",
   );
 }
-const dbFile = path.join(__dirname, "../../app.db");
+//const dbFile = path.join(__dirname, "../../app.db");
 
-//const dbFile = path.join(app.getPath("userData") || ".", "app.db");
+const dbFile = path.join(app.getPath("userData") || ".", "app.db");
 const dir = path.dirname(dbFile);
 if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 
