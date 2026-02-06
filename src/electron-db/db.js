@@ -2,33 +2,27 @@ const path = require("path");
 const fs = require("fs");
 const { app } = require("electron");
 
-let Database;
+const config = require('../config')
+
+let Database
 try {
-  Database = require("better-sqlite3");
+  Database = require('better-sqlite3')
 } catch (err) {
-  throw new Error(
-    "Please install better-sqlite3: `npm install better-sqlite3`",
-  );
+  throw new Error('Please install better-sqlite3: `npm install better-sqlite3`')
 }
-const dbFile = path.join(__dirname, "../../app.db");
 
-//const dbFile = path.join(app.getPath("userData") || ".", "app.db");
-const dir = path.dirname(dbFile);
-if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+const dataRoot = config.getDataRoot()
+const dbFile = path.join(dataRoot, 'app.db')
+const dir = path.dirname(dbFile)
+if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
 
-const db = new Database(dbFile);
+const db = new Database(dbFile)
 
 // Initialize tables
-db.pragma("journal_mode = WAL");
+// Safer for cloud-sync folders: avoid WAL/SHM multi-file state
+db.pragma('journal_mode = DELETE')
+db.pragma('synchronous = FULL')
 
-//create table if not exists public.projects (
-//  id bigint primary key generated always as identity,
-//  name text not null,
-//  description text,
-//  created_at timestamp without time zone default timezone('utc'::text, now()),
-//  updated_at timestamp without time zone default timezone('utc'::text, now())
-//);
-//
 db.exec(`
 CREATE TABLE IF NOT EXISTS fields (
   id TEXT PRIMARY KEY,
@@ -108,6 +102,19 @@ CREATE TABLE IF NOT EXISTS records (
 CREATE INDEX IF NOT EXISTS idx_records_project_id ON records(project_id);
 CREATE INDEX IF NOT EXISTS idx_records_created_at ON records(created_at);
 `)
+
+// Lightweight migration: ensure project_id column exists on issues table
+try {
+  const cols = db.prepare('PRAGMA table_info(issues)').all()
+  const hasProjectId = Array.isArray(cols) && cols.some((c) => c.name === 'project_id')
+  if (!hasProjectId) {
+    db.exec('ALTER TABLE issues ADD COLUMN project_id INTEGER')
+    db.exec('CREATE INDEX IF NOT EXISTS idx_issues_project_id ON issues(project_id)')
+  }
+} catch (err) {
+  // Ignore migration errors; table may already be up to date
+}
+
 
 try {
   db.exec(`

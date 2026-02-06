@@ -60,6 +60,23 @@ const myappAPI = {
   pickPhotos: () => ipcRenderer.invoke('pickPhotos'),
   // Copy photos to persistent app folder scoped to record
   copyPhotos: (recordId, filePaths) => ipcRenderer.invoke('copyPhotos', recordId, filePaths),
+
+     // Sync root config
+  getSyncRoot: () => ipcRenderer.invoke('getSyncRoot'),
+  setSyncRoot: (p) => ipcRenderer.invoke('setSyncRoot', p),
+  // Resolve a relative photo path to a file:// absolute path for display
+  resolvePhotoPath: (relPath) => {
+    try {
+      const root = ipcRenderer.sendSync('getSyncRootSync')
+      if (!root || !relPath) return null
+      const pathMod = require('path')
+      const full = pathMod.join(root, relPath)
+      return `file://${full}`
+    } catch (err) {
+      console.error('[preload] resolvePhotoPath error', err)
+      return null
+    }
+  },
 };
 
 contextBridge.exposeInMainWorld("myappAPI", myappAPI);
