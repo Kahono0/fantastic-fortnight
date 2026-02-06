@@ -407,12 +407,17 @@ ipcMain.handle("importExcel", async (_event, projectId, filePath, mapping) => {
 
         // Copy photos from photo_path directory into record's photos folder and attach relative paths
         try {
-          const ppath = String(
+          let ppath = String(
             issueData["photo_path"] ||
               row["Photo Path"] ||
               row["photo_path"] ||
               "",
           ).trim();
+            // if starts with /Dropbox/, expand to user's Dropbox folder
+            if (ppath.startsWith("/Dropbox/") || ppath.startsWith("C:\\Dropbox\\")) {
+                const home = app.getPath("home") || "";
+                ppath = path.join(home, "Dropbox", ppath.slice(9));
+            }
           if (ppath) {
             const imageExt = /\.(jpe?g|png|gif|heic|webp|tiff?)$/i;
             if (fs.existsSync(ppath) && fs.statSync(ppath).isDirectory()) {
