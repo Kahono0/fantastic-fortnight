@@ -10,9 +10,9 @@ try {
     "Please install better-sqlite3: `npm install better-sqlite3`",
   );
 }
-//const dbFile = path.join(__dirname, "../../app.db");
+const dbFile = path.join(__dirname, "../../app.db");
 
-const dbFile = path.join(app.getPath("userData") || ".", "app.db");
+//const dbFile = path.join(app.getPath("userData") || ".", "app.db");
 const dir = path.dirname(dbFile);
 if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 
@@ -28,27 +28,25 @@ db.pragma("journal_mode = WAL");
 //  created_at timestamp without time zone default timezone('utc'::text, now()),
 //  updated_at timestamp without time zone default timezone('utc'::text, now())
 //);
-
-db.exec(
-  `CREATE TABLE IF NOT EXISTS fields (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT NOT NULL UNIQUE,
-        label TEXT,
-        type TEXT NOT NULL DEFAULT 'text',
-        required BOOLEAN DEFAULT FALSE,
-        static BOOLEAN DEFAULT FALSE,
-        options TEXT,
-        placeholder TEXT,
-      index_order INTEGER DEFAULT 0,
-      visible BOOLEAN DEFAULT TRUE,
-      exportable BOOLEAN DEFAULT TRUE,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    );
-
-    CREATE TABLE IF NOT EXISTS issues (
+//
+db.exec(`
+CREATE TABLE IF NOT EXISTS fields (
   id TEXT PRIMARY KEY,
-project_id INTEGER,
+  name TEXT UNIQUE NOT NULL,
+  label TEXT,
+  type TEXT,
+  required INTEGER DEFAULT 0,
+  static INTEGER DEFAULT 0,
+  options TEXT,
+  placeholder TEXT,
+  created_at TEXT,
+  updated_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS issues (
+  id TEXT PRIMARY KEY,
+  record_id TEXT,
+  project_id INTEGER,
   data TEXT NOT NULL,
   created_at TEXT,
   updated_at TEXT
@@ -68,18 +66,48 @@ CREATE TABLE IF NOT EXISTS issue_index (
 CREATE INDEX IF NOT EXISTS idx_issue_index_field_text ON issue_index(field_name, value_text);
 CREATE INDEX IF NOT EXISTS idx_issue_index_field_number ON issue_index(field_name, value_number);
 CREATE INDEX IF NOT EXISTS idx_issue_index_issue ON issue_index(issue_id);
+CREATE INDEX IF NOT EXISTS idx_issues_record_id ON issues(record_id);
+CREATE INDEX IF NOT EXISTS idx_issues_project_id ON issues(project_id);
 
-
---- Projects table.
+-- Projects table for electron-side project management
 CREATE TABLE IF NOT EXISTS projects (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT NOT NULL,
   description TEXT,
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  archived INTEGER DEFAULT 0,
+  created_at TEXT,
+  updated_at TEXT
 );
-    `,
+
+CREATE INDEX IF NOT EXISTS idx_projects_archived ON projects(archived);
+CREATE INDEX IF NOT EXISTS idx_projects_created_at ON projects(created_at);
+
+-- Defects table (linked to projects)
+CREATE TABLE IF NOT EXISTS defects (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  project_id INTEGER NOT NULL,
+  number TEXT NOT NULL,
+  description TEXT,
+  created_at TEXT,
+  updated_at TEXT
 );
+
+CREATE INDEX IF NOT EXISTS idx_defects_project_id ON defects(project_id);
+CREATE INDEX IF NOT EXISTS idx_defects_number ON defects(number);
+
+-- Records table (field notes linked to projects)
+CREATE TABLE IF NOT EXISTS records (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  project_id INTEGER NOT NULL,
+  title TEXT NOT NULL,
+  comments TEXT NOT NULL,
+  created_at TEXT,
+  updated_at TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_records_project_id ON records(project_id);
+CREATE INDEX IF NOT EXISTS idx_records_created_at ON records(created_at);
+`)
 
 try {
   db.exec(`
@@ -98,7 +126,7 @@ INSERT INTO fields (name, label, type, required, static, options, placeholder) V
 ('plan_type', 'Plan Type', 'text', 0, 1, NULL, NULL),
 ('design_type', 'Design Type', 'text', 0, 1, NULL, NULL),
 ('ppt', 'PPT', 'boolean', 0, 1, NULL, NULL),
-('exemplar', 'boolean', 'text', 0, 1, NULL, NULL),
+('exemplar', 'exemplar', 'boolean', 0, 1, NULL, NULL),
 ('issue', 'Issue', 'textarea', 0, 1, NULL, NULL),
 ('cladding', 'Cladding', 'text', 0, 1, NULL, NULL),
 ('component', 'Component', 'text', 0, 1, NULL, NULL),

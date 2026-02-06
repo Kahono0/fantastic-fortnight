@@ -20,19 +20,15 @@ const myappAPI = {
 
   // Issues
   getAllIssues: (projectId) => ipcRenderer.invoke("getAllIssues", projectId),
-  createIssue: (projectId, issueData) =>
-    ipcRenderer.invoke("createIssue", projectId, issueData),
+     createIssue: (projectId, issueData, recordId) => ipcRenderer.invoke('createIssue', projectId, issueData, recordId),
   // window.myappAPI.updateIssue(issueId, issueData)
-  updateIssue: (issueId, issueData) =>
-    ipcRenderer.invoke("updateIssue", issueId, issueData),
+    updateIssue: (id, patch) => ipcRenderer.invoke('updateIssue', id, patch),
+  deleteIssue: (id) => ipcRenderer.invoke('deleteIssue', id),
   getIssueById: (id) => ipcRenderer.invoke("getIssueById", id),
   queryIssues: (projectId, filters) =>
     ipcRenderer.invoke("queryIssues", projectId, filters),
 
   // window.myappAPI.createProject(name, description);
-  createProject: (name, description) =>
-    ipcRenderer.invoke("createProject", name, description),
-  getAllProjects: () => ipcRenderer.invoke("getAllProjects"),
   selectFolder: () => ipcRenderer.invoke("selectFolder"),
     selectImageFile: () => ipcRenderer.invoke("selectImageFile"),
   selectExcelFile: () => ipcRenderer.invoke("selectExcelFile"),
@@ -43,6 +39,27 @@ const myappAPI = {
   listPhotos: (dirPath) => ipcRenderer.invoke("listPhotos", dirPath),
     exportPdf: () => ipcRenderer.invoke('exportPdf'),
     printToPDF: (options) => ipcRenderer.invoke('printToPDF', options),
+
+    getAllProjects: () => ipcRenderer.invoke('getAllProjects'),
+  createProject: (name, description) => ipcRenderer.invoke('createProject', name, description),
+  archiveProject: (id, archived) => ipcRenderer.invoke('archiveProject', id, archived),
+  deleteProject: (id) => ipcRenderer.invoke('deleteProject', id),
+
+    // Defects
+  getDefects: (projectId) => ipcRenderer.invoke('getDefects', projectId),
+  saveDefect: (projectId, defect) => ipcRenderer.invoke('saveDefect', projectId, defect),
+  deleteDefect: (projectId, id) => ipcRenderer.invoke('deleteDefect', projectId, id),
+
+      // Records
+  getRecords: (projectId) => ipcRenderer.invoke('getRecords', projectId),
+  createRecord: (projectId, title) => ipcRenderer.invoke('createRecord', projectId, title),
+  updateRecord: (recordId, patch) => ipcRenderer.invoke('updateRecord', recordId, patch),
+  deleteRecord: (projectId, recordId) => ipcRenderer.invoke('deleteRecord', projectId, recordId),
+
+  // Pick photos via open dialog
+  pickPhotos: () => ipcRenderer.invoke('pickPhotos'),
+  // Copy photos to persistent app folder scoped to record
+  copyPhotos: (recordId, filePaths) => ipcRenderer.invoke('copyPhotos', recordId, filePaths),
 };
 
 contextBridge.exposeInMainWorld("myappAPI", myappAPI);

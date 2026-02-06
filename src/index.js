@@ -7,6 +7,8 @@ const xlsx = require("xlsx");
 const fieldsDb = require("./electron-db/fields");
 const issuesDb = require("./electron-db/issues");
 const projectsDb = require("./electron-db/projects");
+const defectsDb = require('./electron-db/defects')
+const recordsDb = require('./electron-db/records')
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -112,24 +114,32 @@ ipcMain.handle("getAllIssues", async (_event, projectId) => {
   }
 });
 
-ipcMain.handle("createIssue", async (_event, projectId, issueData) => {
+ipcMain.handle('createIssue', async (_event, projectId, issueData, recordId) => {
   try {
-    return issuesDb.createIssue(projectId, issueData);
+    return issuesDb.createIssue(projectId, issueData, recordId)
   } catch (err) {
-    console.error("[main] createIssue", err);
-    return null;
+    console.error('[main] createIssue', err)
+    return null
   }
-});
+})
 
-// window.myappAPI.updateIssue(issueId, issueData)
-ipcMain.handle("updateIssue", async (_event, issueId, issueData) => {
+ipcMain.handle('updateIssue', async (_event, id, patch) => {
   try {
-    return issuesDb.updateIssue(issueId, issueData);
+    return issuesDb.updateIssue(id, patch)
   } catch (err) {
-    console.error("[main] updateIssue", err);
-    return null;
+    console.error('[main] updateIssue', err)
+    return null
   }
-});
+})
+
+ipcMain.handle('deleteIssue', async (_event, id) => {
+  try {
+    return issuesDb.deleteIssue(id)
+  } catch (err) {
+    console.error('[main] deleteIssue', err)
+    return false
+  }
+})
 
 ipcMain.handle("getIssueById", async (_event, id) => {
   try {
@@ -149,25 +159,6 @@ ipcMain.handle("queryIssues", async (_event, projectId, filters) => {
   }
 });
 
-// window.myappAPI.createProject(name, description);
-ipcMain.handle("createProject", async (_event, name, description) => {
-  try {
-    return projectsDb.createProject(name, description);
-  } catch (err) {
-    console.error("[main] createProject", err);
-    return null;
-  }
-});
-
-// window.myappAPI.getAllProjects();
-ipcMain.handle("getAllProjects", async () => {
-  try {
-    return projectsDb.getAllProjects();
-  } catch (err) {
-    console.error("[main] getAllProjects", err);
-    return [];
-  }
-});
 
 ipcMain.handle("selectFolder", async () => {
   try {
@@ -316,6 +307,18 @@ ipcMain.handle("importExcel", async (_event, projectId, filePath, mapping) => {
           }
         }
 
+          // go through issueData, if all fields are null/empty, skip
+          const allEmpty = Object.values(issueData).every(
+            (v) => v === null || v === undefined || v === "",
+          );
+          if (allEmpty) {
+            summary.errors.push({
+              row: i + 1,
+              error: "All fields are empty, skipping",
+            });
+            continue;
+          }
+
         // Create issue in local DB
         await issuesDb.createIssue(projectId, issueData);
         summary.imported += 1;
@@ -414,3 +417,156 @@ ipcMain.handle("exportPdf", async (event) => {
     return { success: false, error: String(err) };
   }
 });
+
+ipcMain.handle('getAllProjects', async () => {
+  try {
+    return projectsDb.getAllProjects()
+  } catch (err) {
+    console.error('[main] getAllProjects', err)
+    return []
+  }
+})
+
+ipcMain.handle('createProject', async (_event, name, description) => {
+  try {
+    if (!name || typeof name !== 'string') throw new Error('Invalid name')
+    return projectsDb.createProject(name, description)
+  } catch (err) {
+    console.error('[main] createProject', err)
+    return null
+  }
+})
+
+ipcMain.handle('archiveProject', async (_event, id, archived) => {
+  try {
+    if (id == null) throw new Error('Invalid id')
+    return projectsDb.archiveProject(id, !!archived)
+  } catch (err) {
+    console.error('[main] archiveProject', err)
+    return null
+  }
+})
+
+ipcMain.handle('deleteProject', async (_event, id) => {
+  try {
+    if (id == null) throw new Error('Invalid id')
+    return projectsDb.deleteProject(id)
+  } catch (err) {
+    console.error('[main] deleteProject', err)
+    return false
+  }
+})
+
+
+// Defects IPC
+ipcMain.handle('getDefects', async (_event, projectId) => {
+  try {
+    return defectsDb.getDefects(projectId)
+  } catch (err) {
+    console.error('[main] getDefects', err)
+    return []
+  }
+})
+
+ipcMain.handle('saveDefect', async (_event, projectId, defect) => {
+  try {
+    return defectsDb.saveDefect(projectId, defect)
+  } catch (err) {
+    console.error('[main] saveDefect', err)
+    return null
+  }
+})
+
+ipcMain.handle('deleteDefect', async (_event, projectId, id) => {
+  try {
+    return defectsDb.deleteDefect(projectId, id)
+  } catch (err) {
+    console.error('[main] deleteDefect', err)
+    return false
+  }
+})
+
+// Records IPC
+ipcMain.handle('getRecords', async (_event, projectId) => {
+  try {
+    return recordsDb.getRecords(projectId)
+  } catch (err) {
+    console.error('[main] getRecords', err)
+    return []
+  }
+})
+
+ipcMain.handle('createRecord', async (_event, projectId, title) => {
+  try {
+    return recordsDb.createRecord(projectId, title)
+  } catch (err) {
+    console.error('[main] createRecord', err)
+    return null
+  }
+})
+
+ipcMain.handle('updateRecord', async (_event, recordId, patch) => {
+  try {
+    return recordsDb.updateRecord(recordId, patch)
+  } catch (err) {
+    console.error('[main] updateRecord', err)
+    return null
+  }
+})
+
+ipcMain.handle('deleteRecord', async (_event, projectId, recordId) => {
+  try {
+    return recordsDb.deleteRecord(projectId, recordId)
+  } catch (err) {
+    console.error('[main] deleteRecord', err)
+    return false
+  }
+})
+
+// Pick photos via open dialog (multiple)
+ipcMain.handle('pickPhotos', async () => {
+  try {
+    const result = await dialog.showOpenDialog({
+      properties: ['openFile', 'multiSelections'],
+      filters: [{ name: 'Images', extensions: ['jpg', 'jpeg', 'png', 'gif', 'heic', 'webp', 'tif', 'tiff'] }],
+    })
+    if (result.canceled) return []
+    return Array.isArray(result.filePaths) ? result.filePaths : []
+  } catch (err) {
+    console.error('[main] pickPhotos', err)
+    return []
+  }
+})
+
+// Copy photos to app data folder under photos/<recordId>/ and return file:// paths
+ipcMain.handle('copyPhotos', async (_event, recordId, filePaths) => {
+  try {
+    if (!recordId) throw new Error('Invalid recordId')
+    if (!Array.isArray(filePaths) || filePaths.length === 0) return []
+    const destDir = path.join(app.getPath('userData') || '.', 'photos', String(recordId))
+    if (!fs.existsSync(destDir)) fs.mkdirSync(destDir, { recursive: true })
+
+    const copied = []
+    for (const src of filePaths) {
+      if (!src || typeof src !== 'string') continue
+      const base = path.basename(src)
+      // Avoid collisions: prefix with timestamp if exists
+      let dest = path.join(destDir, base)
+      if (fs.existsSync(dest)) {
+        const name = path.parse(base).name
+        const ext = path.parse(base).ext
+        dest = path.join(destDir, `${Date.now()}_${name}${ext}`)
+      }
+      try {
+        fs.copyFileSync(src, dest)
+        copied.push(`file://${dest}`)
+      } catch (err) {
+        console.error('[main] copyPhotos item error', err)
+      }
+    }
+    return copied
+  } catch (err) {
+    console.error('[main] copyPhotos', err)
+    return []
+  }
+})
