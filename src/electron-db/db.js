@@ -18,6 +18,19 @@ if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
 
 const db = new Database(dbFile)
 
+function addNewColumn(table, column, type, defaultValue = null) {
+  try {
+    const cols = db.prepare(`PRAGMA table_info(${table})`).all()
+      console.log(`Existing columns in ${table}:`, cols.map(c => c.name))
+    const hasColumn = Array.isArray(cols) && cols.some((c) => c.name === column)
+    if (!hasColumn) {
+      db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type} DEFAULT ${defaultValue}`)
+    }
+  } catch (err) {
+    console.error(`Error adding column ${column} to table ${table}:`, err)
+  }
+}
+
 // Initialize tables
 // Safer for cloud-sync folders: avoid WAL/SHM multi-file state
 db.pragma('journal_mode = DELETE')
@@ -76,6 +89,7 @@ CREATE TABLE IF NOT EXISTS projects (
 CREATE INDEX IF NOT EXISTS idx_projects_archived ON projects(archived);
 CREATE INDEX IF NOT EXISTS idx_projects_created_at ON projects(created_at);
 
+
 -- Defects table (linked to projects)
 CREATE TABLE IF NOT EXISTS defects (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -114,6 +128,8 @@ try {
 } catch (err) {
   // Ignore migration errors; table may already be up to date
 }
+
+addNewColumn('projects', 'current_active', 'INTEGER', 0)
 
 
 try {

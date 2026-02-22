@@ -44,6 +44,11 @@ const myappAPI = {
   createProject: (name, description) => ipcRenderer.invoke('createProject', name, description),
   archiveProject: (id, archived) => ipcRenderer.invoke('archiveProject', id, archived),
   deleteProject: (id) => ipcRenderer.invoke('deleteProject', id),
+    //setCurrentActiveProject, getCurrentActiveProject, closeCurrentActiveProject
+    setCurrentActiveProject: (id) => ipcRenderer.invoke('setCurrentActiveProject', id),
+    getCurrentActiveProject: () => ipcRenderer.invoke('getCurrentActiveProject'),
+    closeCurrentActiveProject: () => ipcRenderer.invoke('closeCurrentActiveProject'),
+
 
     // Defects
   getDefects: (projectId) => ipcRenderer.invoke('getDefects', projectId),
@@ -65,18 +70,19 @@ const myappAPI = {
   getSyncRoot: () => ipcRenderer.invoke('getSyncRoot'),
   setSyncRoot: (p) => ipcRenderer.invoke('setSyncRoot', p),
   // Resolve a relative photo path to a file:// absolute path for display
-  resolvePhotoPath: (relPath) => {
-    try {
-      const root = ipcRenderer.sendSync('getSyncRootSync')
-      if (!root || !relPath) return null
-      const pathMod = require('path')
-      const full = pathMod.join(root, relPath)
-      return `file://${full}`
-    } catch (err) {
-      console.error('[preload] resolvePhotoPath error', err)
-      return null
-    }
-  },
+  //resolvePhotoPath: (relPath) => {
+  //  try {
+  //    const root = ipcRenderer.sendSync('getSyncRootSync')
+  //    if (!root || !relPath) return null
+  //    const pathMod = require('path')
+  //    const full = pathMod.join(root, relPath)
+  //    return `file://${full}`
+  //  } catch (err) {
+  //    console.error('[preload] resolvePhotoPath error', err)
+  //    return null
+  //  }
+  //},
+    resolvePhotoPath: (relPath) => ipcRenderer.invoke('resolvePhotoPath', relPath),
 };
 
 contextBridge.exposeInMainWorld("myappAPI", myappAPI);

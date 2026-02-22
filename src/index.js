@@ -12,6 +12,213 @@ const projectsDb = require("./electron-db/projects");
 const defectsDb = require("./electron-db/defects");
 const recordsDb = require("./electron-db/records");
 
+const IMAGE_EXT_REGEX = /\.(jpe?g|png|gif|heic|webp|tiff?)$/i;
+
+function toPosixPath(p) {
+  return String(p || "").replace(/\\/g, "/");
+}
+
+function stripFileProtocol(p) {
+  const raw = String(p || "").trim();
+  if (!raw) return "";
+  if (raw.startsWith("file://")) {
+    const without = raw.replace(/^file:\/\//, "");
+    try {
+      return decodeURIComponent(without);
+    } catch {
+      return without;
+    }
+  }
+  return raw;
+}
+
+function getHomePath() {
+  return path.resolve(app.getPath("home") || "");
+}
+
+function getDropboxHomeRoot() {
+  return path.resolve(path.join(getHomePath(), "Dropbox"));
+}
+
+function getSyncRoot() {
+  return path.resolve(config.getDataRoot());
+}
+
+function isInsidePath(parent, child) {
+  const rel = path.relative(path.resolve(parent), path.resolve(child));
+  return rel && !rel.startsWith("..") && !path.isAbsolute(rel);
+}
+
+function resolveInputPath(inputPath) {
+  let p = stripFileProtocol(inputPath);
+  if (!p) return "";
+
+  const home = getHomePath();
+  if (p.startsWith("/Dropbox/")) {
+    p = path.join(home, p.replace(/^\/+Dropbox\//, "Dropbox/"));
+  } else if (/^[A-Za-z]:\\Dropbox\\/i.test(p)) {
+    p = path.join(home, "Dropbox", p.replace(/^[A-Za-z]:\\Dropbox\\/i, ""));
+  }
+
+  return path.resolve(p);
+}
+
+function toHomeRelativeDropboxPath(absPath) {
+  const resolved = path.resolve(absPath);
+  const home = getHomePath();
+  const rel = path.relative(home, resolved);
+  return toPosixPath(rel);
+}
+
+function toAbsolutePhotoPath(storedPath) {
+  const raw = String(storedPath || "").trim();
+  if (!raw) return "";
+
+  const stripped = stripFileProtocol(raw);
+  if (path.isAbsolute(stripped)) return stripped;
+
+  const home = getHomePath();
+  return path.join(home, stripped);
+}
+
+function toFileUrl(absPath) {
+  if (!absPath) return "";
+  return `file://${absPath}`;
+}
+
+function listImageFilesInDirectory(dirPath) {
+  if (!dirPath || !fs.existsSync(dirPath)) return [];
+  const st = fs.statSync(dirPath);
+  if (!st.isDirectory()) return [];
+
+  return fs
+    .readdirSync(dirPath)
+    .filter((name) => IMAGE_EXT_REGEX.test(name))
+    .map((name) => path.join(dirPath, name));
+}
+
+function ensureRecordPhotoDir(recordId) {
+  const destDir = path.join(getSyncRoot(), "photos", String(recordId));
+  if (!fs.existsSync(destDir)) fs.mkdirSync(destDir, { recursive: true });
+  return destDir;
+}
+
+function uniqueDestinationPath(destDir, filename) {
+  let dest = path.join(destDir, filename);
+  if (!fs.existsSync(dest)) return dest;
+
+  const parsed = path.parse(filename);
+  return path.join(destDir, `${Date.now()}_${parsed.name}${parsed.ext}`);
+}
+
+function ensurePhotoInDropbox(recordId, sourcePath) {
+  const source = resolveInputPath(sourcePath);
+  if (!source) return null;
+  if (!fs.existsSync(source)) return null;
+
+  const dropboxRoot = getDropboxHomeRoot();
+  if (isInsidePath(dropboxRoot, source)) {
+    // Already synced by Dropbox: do not copy
+    return toHomeRelativeDropboxPath(source);
+  }
+
+  const destDir = ensureRecordPhotoDir(recordId);
+  const dest = uniqueDestinationPath(destDir, path.basename(source));
+  fs.copyFileSync(source, dest);
+  return toHomeRelativeDropboxPath(dest);
+}
+
+function buildIssueDataFromRow(row, mapping) {
+  const issueData = {};
+  if (!(mapping && typeof mapping === "object")) return issueData;
+
+  const normalizeKey = (s = "") =>
+    String(s || "")
+      .replace(/\uFEFF/g, "")
+      .replace(/\r\n|\r|\n/g, " ")
+      .trim()
+      .toLowerCase()
+      .replace(/^[^a-z0-9]+|[^a-z0-9]+$/g, "")
+      .replace(/[^a-z0-9]+/g, "_");
+
+  const normalizedRowMap = new Map();
+  for (const origKey of Object.keys(row || {})) {
+    const val = row[origKey];
+    const norm = normalizeKey(origKey);
+    normalizedRowMap.set(norm, val);
+    normalizedRowMap.set(String(origKey).trim().toLowerCase(), val);
+    normalizedRowMap.set(String(origKey), val);
+  }
+
+  for (const [hdr, dest] of Object.entries(mapping)) {
+    if (!dest) continue;
+    const hdrNorm = normalizeKey(hdr);
+    const hdrTrim = String(hdr).trim().toLowerCase();
+    let val;
+
+    if (normalizedRowMap.has(hdrNorm)) val = normalizedRowMap.get(hdrNorm);
+    else if (normalizedRowMap.has(hdrTrim)) val = normalizedRowMap.get(hdrTrim);
+    else if (normalizedRowMap.has(hdr)) val = normalizedRowMap.get(hdr);
+    else {
+      const alt = String(hdr)
+        .replace(/[^a-zA-Z0-9]+/g, " ")
+        .trim()
+        .toLowerCase();
+      const alt2 = alt.replace(/\s+/g, "_");
+      if (normalizedRowMap.has(alt)) val = normalizedRowMap.get(alt);
+      else if (normalizedRowMap.has(alt2)) val = normalizedRowMap.get(alt2);
+    }
+
+    issueData[dest] = val;
+  }
+
+  return issueData;
+}
+
+function splitInspectionFields(issueData) {
+  const inspectorRaw = String(issueData?.inspector || "").trim();
+  if (!inspectorRaw) return;
+  const parts = inspectorRaw.split(" ");
+  if (parts.length < 2) return;
+  issueData.inspection_date = parts[0];
+  issueData.inspector = parts.slice(1).join(" ");
+}
+
+function getDefectInfo(issueData, row) {
+  const defectText = String(
+    issueData["issue"] || issueData["*Issue"] || row["*Issue"] || row["Issue"] || "",
+  ).trim();
+
+  if (!defectText) return { defectNumber: "", defectDescription: "" };
+
+  const parts = defectText.split(/\s+/);
+  const defectNumber = parts[0] || "";
+  let defectDescription = defectText;
+  if (defectNumber && defectDescription.startsWith(defectNumber)) {
+    defectDescription = defectDescription.slice(defectNumber.length).trim();
+  }
+
+  return { defectNumber, defectDescription };
+}
+
+function buildComment(issueData, row, defectNumber) {
+  const address = String(issueData["address"] || row["*Address"] || row["Address"] || "").trim();
+  const observation = String(issueData["observation"] || row["Observation"] || "").trim();
+  return {
+    id: uuidv4(),
+    address,
+    text: observation,
+    photos: [],
+    defect_number: defectNumber,
+  };
+}
+
+function getPhotoSourceDir(issueData, row) {
+  const raw = String(issueData["photo_path"] || row["Photo Path"] || row["photo_path"] || "").trim();
+  if (!raw) return "";
+  return resolveInputPath(raw);
+}
+
 function createWindow() {
   const win = new BrowserWindow({
     width: 1200,
@@ -290,170 +497,32 @@ ipcMain.handle("importExcel", async (_event, projectId, filePath, mapping) => {
 
     // Accumulate comments and defects
     const comments = [];
-    const defectMap = new Map(); // number -> description
 
     for (const [i, row] of rows.entries()) {
       try {
-        // Build issueData using mapping if provided, otherwise copy all columns with normalized keys
-        const issueData = {};
-        if (mapping && typeof mapping === "object") {
-          // Build a normalized lookup map for this row so header variations map to the actual value.
-          // Use a single normalization function for keys so mapping lookup is stable.
-          const normalizeKey = (s = "") =>
-            String(s || "")
-              .replace(/\uFEFF/g, "") // remove BOM
-              .replace(/\r\n|\r|\n/g, " ") // normalize newlines to spaces
-              .trim()
-              .toLowerCase()
-              .replace(/^[^a-z0-9]+|[^a-z0-9]+$/g, "")
-              .replace(/[^a-z0-9]+/g, "_");
-
-          const normalizedRowMap = new Map();
-          for (const origKey of Object.keys(row)) {
-            const val = row[origKey];
-            const norm = normalizeKey(origKey);
-            // store both normalized and trimmed forms to maximize hit rate
-            normalizedRowMap.set(norm, val);
-            normalizedRowMap.set(String(origKey).trim().toLowerCase(), val);
-            normalizedRowMap.set(String(origKey), val);
-          }
-
-          for (const [hdr, dest] of Object.entries(mapping)) {
-            if (!dest) continue;
-            const hdrNorm = normalizeKey(hdr);
-            const hdrTrim = String(hdr).trim().toLowerCase();
-            let val = undefined;
-            if (normalizedRowMap.has(hdrNorm))
-              val = normalizedRowMap.get(hdrNorm);
-            else if (normalizedRowMap.has(hdrTrim))
-              val = normalizedRowMap.get(hdrTrim);
-            else if (normalizedRowMap.has(hdr)) val = normalizedRowMap.get(hdr);
-            else {
-              // fallback: try alternate transforms
-              const alt = String(hdr)
-                .replace(/[^a-zA-Z0-9]+/g, " ")
-                .trim()
-                .toLowerCase();
-              const alt2 = alt.replace(/\s+/g, "_");
-              if (normalizedRowMap.has(alt)) val = normalizedRowMap.get(alt);
-              else if (normalizedRowMap.has(alt2))
-                val = normalizedRowMap.get(alt2);
-            }
-            issueData[dest] = val;
-          }
-          // Heuristic: split combined "Inspection Date / Inspector" if not explicitly mapped
-          //if (!issueData.inspection_date || !issueData.inspector) {
-          //  const combinedKey = Object.keys(row).find((k) => /inspection.*date/i.test(k) && /inspector/i.test(k))
-          //  if (combinedKey) {
-          //    const raw = String(row[combinedKey] || '')
-          //    const m = raw.match(/(\d{4}-\d{2}-\d{2})\s+(.*)/)
-          //    if (m) {
-          //      if (!issueData.inspection_date) issueData.inspection_date = m[1]
-          //      if (!issueData.inspector) issueData.inspector = m[2]
-          //    }
-          //  }
-          //}
-        } else {
-        }
+        const issueData = buildIssueDataFromRow(row, mapping);
 
         // if all fields missing, skip
         const allMissing = Object.values(issueData).every(
           (v) => v == null || String(v).trim() === "",
         );
         if (allMissing) continue;
-        // split issueData inspector to separate date/inspector
-        const inspectorRaw = String(issueData["inspector"] || "").trim();
-        //split by space date[0] and rest as inspector
-        const splitParts = inspectorRaw?.split(" ");
-        if (splitParts.length >= 2) {
-          issueData["inspection_date"] = splitParts[0];
-          issueData["inspector"] = splitParts.slice(1).join(" ");
-        }
 
-        // Prepare defect number and description
-        const defectText = String(
-          issueData["issue"] ||
-            issueData["*Issue"] ||
-            row["*Issue"] ||
-            row["Issue"] ||
-            "",
-        ).trim();
-        let defectNumber = "";
-        let defectDescription = defectText;
-        if (defectText) {
-          const parts = defectText.split(/\s+/);
-          defectNumber = parts[0] || "";
-          if (defectNumber && defectDescription.startsWith(defectNumber)) {
-            defectDescription = defectDescription
-              .slice(defectNumber.length)
-              .trim();
-          }
-        }
+        splitInspectionFields(issueData);
+        const { defectNumber, defectDescription } = getDefectInfo(issueData, row);
+        const comment = buildComment(issueData, row, defectNumber);
 
-        // Build comment
-        const address = String(
-          issueData["address"] || row["*Address"] || row["Address"] || "",
-        ).trim();
-        const observation = String(
-          issueData["observation"] || row["Observation"] || "",
-        ).trim();
-        const comment = {
-          id: uuidv4(),
-          address,
-          text: observation,
-          photos: [],
-          defect_number: defectNumber,
-        };
-
-        // Copy photos from photo_path directory into record's photos folder and attach relative paths
+        // Process photos from source directory and store Dropbox-relative paths
         try {
-          let ppath = String(
-            issueData["photo_path"] ||
-              row["Photo Path"] ||
-              row["photo_path"] ||
-              "",
-          ).trim();
-            // if starts with /Dropbox/, expand to user's Dropbox folder
-            if (ppath.startsWith("/Dropbox/") || ppath.startsWith("C:\\Dropbox\\")) {
-                const home = app.getPath("home") || "";
-                ppath = path.join(home, "Dropbox", ppath.slice(9));
-            }
-          if (ppath) {
-            const imageExt = /\.(jpe?g|png|gif|heic|webp|tiff?)$/i;
-            if (fs.existsSync(ppath) && fs.statSync(ppath).isDirectory()) {
-              const entries = fs.readdirSync(ppath);
-              const files = entries
-                .filter((f) => imageExt.test(f))
-                .map((f) => path.join(ppath, f));
-              if (recordId && files.length) {
-                const destDir = path.join(
-                  config.getDataRoot(),
-                  "photos",
-                  String(recordId),
-                );
-                if (!fs.existsSync(destDir))
-                  fs.mkdirSync(destDir, { recursive: true });
-                for (const src of files) {
-                  if (!src || typeof src !== "string") continue;
-                  const base = path.basename(src);
-                  let dest = path.join(destDir, base);
-                  if (fs.existsSync(dest)) {
-                    const name = path.parse(base).name;
-                    const ext = path.parse(base).ext;
-                    dest = path.join(destDir, `${Date.now()}_${name}${ext}`);
-                  }
-                  try {
-                    fs.copyFileSync(src, dest);
-                    const rel = path.join(
-                      "photos",
-                      String(recordId),
-                      path.basename(dest),
-                    );
-                    comment.photos.push(rel);
-                  } catch (err) {
-                    console.error("[main] importExcel copy photo error", err);
-                  }
-                }
+          const sourceDir = getPhotoSourceDir(issueData, row);
+          if (recordId && sourceDir) {
+            const files = listImageFilesInDirectory(sourceDir);
+            for (const src of files) {
+              try {
+                const stored = ensurePhotoInDropbox(recordId, src);
+                if (stored) comment.photos.push(stored);
+              } catch (copyErr) {
+                console.error("[main] importExcel copy photo error", copyErr);
               }
             }
           }
@@ -620,6 +689,36 @@ ipcMain.handle("deleteProject", async (_event, id) => {
   }
 });
 
+// setCurrentActiveProject, getCurrentActiveProject, closeCurrentActiveProject
+ipcMain.handle("setCurrentActiveProject", async (_event, id) => {
+  try {
+    if (id == null) throw new Error("Invalid id");
+    return projectsDb.setCurrentActiveProject(id);
+  } catch (err) {
+    console.error("[main] setCurrentActiveProject", err);
+    return null;
+  }
+});
+
+ipcMain.handle("getCurrentActiveProject", async () => {
+  try {
+    return projectsDb.getCurrentActiveProject();
+  } catch (err) {
+    console.error("[main] getCurrentActiveProject", err);
+    return null;
+  }
+});
+
+ipcMain.handle("closeCurrentActiveProject", async () => {
+  try {
+    return projectsDb.closeCurrentActiveProject();
+  } catch (err) {
+    console.error("[main] closeCurrentActiveProject", err);
+    return false;
+  }
+});
+
+
 // Defects IPC
 ipcMain.handle("getDefects", async (_event, projectId) => {
   try {
@@ -651,7 +750,21 @@ ipcMain.handle("deleteDefect", async (_event, projectId, id) => {
 // Records IPC
 ipcMain.handle("getRecords", async (_event, projectId) => {
   try {
-    return recordsDb.getRecords(projectId);
+    const records = recordsDb.getRecords(projectId);
+    return records.map((record) => {
+      const comments = Array.isArray(record?.comments)
+        ? record.comments.map((comment) => {
+            const photos = Array.isArray(comment?.photos)
+              ? comment.photos.map((p) => {
+                  const abs = toAbsolutePhotoPath(p);
+                  return abs ? toFileUrl(abs) : p;
+                })
+              : [];
+            return { ...comment, photos };
+          })
+        : [];
+      return { ...record, comments };
+    });
   } catch (err) {
     console.error("[main] getRecords", err);
     return [];
@@ -714,43 +827,23 @@ ipcMain.handle("pickPhotos", async () => {
   }
 });
 
-// Copy photos to app data folder under photos/<recordId>/ and return file:// paths
+// Copy photos when needed and return Dropbox-relative paths
 ipcMain.handle("copyPhotos", async (_event, recordId, filePaths) => {
   try {
     if (!recordId) throw new Error("Invalid recordId");
     if (!Array.isArray(filePaths) || filePaths.length === 0) return [];
-   // const destDir = path.join(
-   //   app.getPath("userData") || ".",
-   //   "photos",
-   //   String(recordId),
-   // );
-      // destDir under sync root
-    const destDir = path.join(
-      config.getDataRoot(),
-      "photos",
-      String(recordId),
-    );
-    if (!fs.existsSync(destDir)) fs.mkdirSync(destDir, { recursive: true });
 
-    const copied = [];
+    const stored = [];
     for (const src of filePaths) {
       if (!src || typeof src !== "string") continue;
-      const base = path.basename(src);
-      // Avoid collisions: prefix with timestamp if exists
-      let dest = path.join(destDir, base);
-      if (fs.existsSync(dest)) {
-        const name = path.parse(base).name;
-        const ext = path.parse(base).ext;
-        dest = path.join(destDir, `${Date.now()}_${name}${ext}`);
-      }
       try {
-        fs.copyFileSync(src, dest);
-        copied.push(`file://${dest}`);
+        const rel = ensurePhotoInDropbox(recordId, src);
+        if (rel) stored.push(rel);
       } catch (err) {
         console.error("[main] copyPhotos item error", err);
       }
     }
-    return copied;
+    return stored;
   } catch (err) {
     console.error("[main] copyPhotos", err);
     return [];
@@ -784,4 +877,31 @@ ipcMain.on("getSyncRootSync", (event) => {
     console.error("[main] getSyncRootSync", err);
     event.returnValue = null;
   }
+});
+
+ipcMain.handle("resolvePhotoPath", async (_event, relPath) => {
+    try {
+      if (!relPath) return null
+      const raw = String(relPath)
+      if (!raw) return null
+
+      if (raw.startsWith('file://')) return raw
+
+      const pathMod = path
+      if (pathMod.isAbsolute(raw)) return `file://${raw}`
+
+        const home = app.getPath('home') || ''
+      if (raw.startsWith('Dropbox/')) {
+        const fullDropbox = pathMod.join(home, raw)
+        return `file://${fullDropbox}`
+      }
+
+      const root = ipcRenderer.sendSync('getSyncRootSync')
+      if (!root) return null
+      const full = pathMod.join(root, raw)
+      return `file://${full}`
+    } catch (err) {
+      console.error('[preload] resolvePhotoPath error', err)
+      return null
+    }
 });

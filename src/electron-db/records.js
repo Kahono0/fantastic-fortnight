@@ -76,6 +76,8 @@ exports.updateRecord = function (recordId, patch) {
             return [];
           }
         })();
+    console.log("Updating record", { recordId, nextTitle});
+    console.log("Next comments:", JSON.stringify(nextComments, null, 2));
     const upd = db.prepare(
       "UPDATE records SET title = ?, comments = ?, updated_at = ? WHERE id = ?",
     );
