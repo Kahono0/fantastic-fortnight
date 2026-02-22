@@ -1,7 +1,7 @@
 {
   "name": "issue-db",
   "productName": "Issue DB",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "description": "Manage and track issues efficiently with Issue DB, a desktop application built with Electron.",
   "main": "src/index.js",
   "scripts": {
