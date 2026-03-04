@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog } = require("electron");
+const { app, BrowserWindow, ipcMain, dialog, webUtils } = require("electron");
 const path = require("path");
 const fs = require("fs");
 const xlsx = require("xlsx");
@@ -905,3 +905,26 @@ ipcMain.handle("resolvePhotoPath", async (_event, relPath) => {
       return null
     }
 });
+
+//getPathForFile: (file) => {
+//    try {
+//      if (!file) return null
+//      const p = webUtils.getPathForFile(file)
+//      return p && typeof p === 'string' ? p : null
+//    } catch (err) {
+//      console.error('[preload] getPathForFile error', err)
+//      return null
+//    }
+//  },
+    //
+ipcMain.handle("getPathForFile", async (_event, file) => {
+    try {
+        console.log('[main] getPathForFile called with', file)
+      if (!file) return null
+      const p = webUtils.getPathForFile(file)
+      return p && typeof p === 'string' ? p : null
+    } catch (err) {
+      console.error('[preload] getPathForFile error', err)
+      return null
+    }
+  });

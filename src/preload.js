@@ -4,7 +4,7 @@
 // This file should be used as the preload script when creating the BrowserWindow
 // e.g. new BrowserWindow({ webPreferences: { preload: path.join(__dirname, 'preload.js') } })
 
-const { contextBridge, ipcRenderer } = require("electron");
+const { contextBridge, ipcRenderer, webUtils } = require("electron");
 
 const myappAPI = {
   // Fields
@@ -20,69 +20,78 @@ const myappAPI = {
 
   // Issues
   getAllIssues: (projectId) => ipcRenderer.invoke("getAllIssues", projectId),
-     createIssue: (projectId, issueData, recordId) => ipcRenderer.invoke('createIssue', projectId, issueData, recordId),
+  createIssue: (projectId, issueData, recordId) =>
+    ipcRenderer.invoke("createIssue", projectId, issueData, recordId),
   // window.myappAPI.updateIssue(issueId, issueData)
-    updateIssue: (id, patch) => ipcRenderer.invoke('updateIssue', id, patch),
-  deleteIssue: (id) => ipcRenderer.invoke('deleteIssue', id),
+  updateIssue: (id, patch) => ipcRenderer.invoke("updateIssue", id, patch),
+  deleteIssue: (id) => ipcRenderer.invoke("deleteIssue", id),
   getIssueById: (id) => ipcRenderer.invoke("getIssueById", id),
   queryIssues: (projectId, filters) =>
     ipcRenderer.invoke("queryIssues", projectId, filters),
 
   // window.myappAPI.createProject(name, description);
   selectFolder: () => ipcRenderer.invoke("selectFolder"),
-    selectImageFile: () => ipcRenderer.invoke("selectImageFile"),
+  selectImageFile: () => ipcRenderer.invoke("selectImageFile"),
   selectExcelFile: () => ipcRenderer.invoke("selectExcelFile"),
   previewExcel: (filePath) => ipcRenderer.invoke("previewExcel", filePath),
   // Import and process an Excel file on the main process (returns summary)
   importExcel: (projectId, filePath, mapping) =>
     ipcRenderer.invoke("importExcel", projectId, filePath, mapping),
   listPhotos: (dirPath) => ipcRenderer.invoke("listPhotos", dirPath),
-    exportPdf: () => ipcRenderer.invoke('exportPdf'),
-    printToPDF: (options) => ipcRenderer.invoke('printToPDF', options),
+  exportPdf: () => ipcRenderer.invoke("exportPdf"),
+  printToPDF: (options) => ipcRenderer.invoke("printToPDF", options),
 
-    getAllProjects: () => ipcRenderer.invoke('getAllProjects'),
-  createProject: (name, description) => ipcRenderer.invoke('createProject', name, description),
-  archiveProject: (id, archived) => ipcRenderer.invoke('archiveProject', id, archived),
-  deleteProject: (id) => ipcRenderer.invoke('deleteProject', id),
-    //setCurrentActiveProject, getCurrentActiveProject, closeCurrentActiveProject
-    setCurrentActiveProject: (id) => ipcRenderer.invoke('setCurrentActiveProject', id),
-    getCurrentActiveProject: () => ipcRenderer.invoke('getCurrentActiveProject'),
-    closeCurrentActiveProject: () => ipcRenderer.invoke('closeCurrentActiveProject'),
+  getAllProjects: () => ipcRenderer.invoke("getAllProjects"),
+  createProject: (name, description) =>
+    ipcRenderer.invoke("createProject", name, description),
+  archiveProject: (id, archived) =>
+    ipcRenderer.invoke("archiveProject", id, archived),
+  deleteProject: (id) => ipcRenderer.invoke("deleteProject", id),
+  //setCurrentActiveProject, getCurrentActiveProject, closeCurrentActiveProject
+  setCurrentActiveProject: (id) =>
+    ipcRenderer.invoke("setCurrentActiveProject", id),
+  getCurrentActiveProject: () => ipcRenderer.invoke("getCurrentActiveProject"),
+  closeCurrentActiveProject: () =>
+    ipcRenderer.invoke("closeCurrentActiveProject"),
 
+  // Defects
+  getDefects: (projectId) => ipcRenderer.invoke("getDefects", projectId),
+  saveDefect: (projectId, defect) =>
+    ipcRenderer.invoke("saveDefect", projectId, defect),
+  deleteDefect: (projectId, id) =>
+    ipcRenderer.invoke("deleteDefect", projectId, id),
 
-    // Defects
-  getDefects: (projectId) => ipcRenderer.invoke('getDefects', projectId),
-  saveDefect: (projectId, defect) => ipcRenderer.invoke('saveDefect', projectId, defect),
-  deleteDefect: (projectId, id) => ipcRenderer.invoke('deleteDefect', projectId, id),
-
-      // Records
-  getRecords: (projectId) => ipcRenderer.invoke('getRecords', projectId),
-  createRecord: (projectId, title) => ipcRenderer.invoke('createRecord', projectId, title),
-  updateRecord: (recordId, patch) => ipcRenderer.invoke('updateRecord', recordId, patch),
-  deleteRecord: (projectId, recordId) => ipcRenderer.invoke('deleteRecord', projectId, recordId),
+  // Records
+  getRecords: (projectId) => ipcRenderer.invoke("getRecords", projectId),
+  createRecord: (projectId, title) =>
+    ipcRenderer.invoke("createRecord", projectId, title),
+  updateRecord: (recordId, patch) =>
+    ipcRenderer.invoke("updateRecord", recordId, patch),
+  deleteRecord: (projectId, recordId) =>
+    ipcRenderer.invoke("deleteRecord", projectId, recordId),
 
   // Pick photos via open dialog
-  pickPhotos: () => ipcRenderer.invoke('pickPhotos'),
+  pickPhotos: () => ipcRenderer.invoke("pickPhotos"),
   // Copy photos to persistent app folder scoped to record
-  copyPhotos: (recordId, filePaths) => ipcRenderer.invoke('copyPhotos', recordId, filePaths),
+  copyPhotos: (recordId, filePaths) =>
+    ipcRenderer.invoke("copyPhotos", recordId, filePaths),
 
-     // Sync root config
-  getSyncRoot: () => ipcRenderer.invoke('getSyncRoot'),
-  setSyncRoot: (p) => ipcRenderer.invoke('setSyncRoot', p),
-  // Resolve a relative photo path to a file:// absolute path for display
-  //resolvePhotoPath: (relPath) => {
-  //  try {
-  //    const root = ipcRenderer.sendSync('getSyncRootSync')
-  //    if (!root || !relPath) return null
-  //    const pathMod = require('path')
-  //    const full = pathMod.join(root, relPath)
-  //    return `file://${full}`
-  //  } catch (err) {
-  //    console.error('[preload] resolvePhotoPath error', err)
-  //    return null
-  //  }
-  //},
-    resolvePhotoPath: (relPath) => ipcRenderer.invoke('resolvePhotoPath', relPath),
+  // Sync root config
+  getSyncRoot: () => ipcRenderer.invoke("getSyncRoot"),
+  setSyncRoot: (p) => ipcRenderer.invoke("setSyncRoot", p),
+  resolvePhotoPath: (relPath) =>
+    ipcRenderer.invoke("resolvePhotoPath", relPath),
+  getPathForFile: (file) => {
+    try {
+      if (!file) return null;
+      const p = webUtils.getPathForFile(file);
+        console.log("[preload] getPathForFile", { file, p });
+      return p && typeof p === "string" ? p : null;
+    } catch (err) {
+      console.error("[preload] getPathForFile error", err);
+      return null;
+    }
+  },
 };
 
 contextBridge.exposeInMainWorld("myappAPI", myappAPI);
