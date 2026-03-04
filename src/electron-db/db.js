@@ -130,6 +130,9 @@ try {
 }
 
 addNewColumn('projects', 'current_active', 'INTEGER', 0)
+// scope TEXT DEFAULT 'issue',
+addNewColumn('fields', 'scope', 'TEXT', 'issue')
+addNewColumn('fields', 'visible', 'INTEGER', 1)
 
 
 try {
@@ -171,5 +174,18 @@ COMMIT;
 } catch (err) {
   db.exec("ROLLBACK;");
 }
+// change scope of some fields
+// ppt, exemplar, component, room, elevation, location, extent, lf, sf, count_total
+try {
+    db.exec(`
+        BEGIN TRANSACTION;
+        UPDATE fields SET scope = 'comment' WHERE name IN ('address', 'observation', 'ppt', 'exemplar', 'component', 'room', 'elevation', 'location', 'extent', 'lf', 'sf', 'count_total', 'penetration_type', 'window_type', 'door_type');
+        COMMIT;
+    `);
+} catch (err) {
+    db.exec("ROLLBACK;");
+    console.error('Error updating field scopes:', err);
+}
+
 
 module.exports = db;

@@ -128,9 +128,10 @@ function ensurePhotoInDropbox(recordId, sourcePath) {
   return toHomeRelativeDropboxPath(dest);
 }
 
-function buildIssueDataFromRow(row, mapping) {
+function buildMappedDataFromRow(row, mapping) {
   const issueData = {};
-  if (!(mapping && typeof mapping === "object")) return issueData;
+  const commentData = {};
+  if (!(mapping && typeof mapping === "object")) return { issueData, commentData };
 
   const normalizeKey = (s = "") =>
     String(s || "")
@@ -150,8 +151,26 @@ function buildIssueDataFromRow(row, mapping) {
     normalizedRowMap.set(String(origKey), val);
   }
 
-  for (const [hdr, dest] of Object.entries(mapping)) {
+  for (const [hdr, destRaw] of Object.entries(mapping)) {
+    if (!destRaw) continue;
+
+    let target = "issue";
+    let dest = "";
+    if (typeof destRaw === "string") {
+      if (destRaw.includes(":")) {
+        const [t, f] = destRaw.split(":");
+        target = t === "comment" ? "comment" : "issue";
+        dest = f || "";
+      } else {
+        target = "issue";
+        dest = destRaw;
+      }
+    } else if (typeof destRaw === "object") {
+      target = destRaw.target === "comment" ? "comment" : "issue";
+      dest = String(destRaw.field || "");
+    }
     if (!dest) continue;
+
     const hdrNorm = normalizeKey(hdr);
     const hdrTrim = String(hdr).trim().toLowerCase();
     let val;
@@ -169,10 +188,11 @@ function buildIssueDataFromRow(row, mapping) {
       else if (normalizedRowMap.has(alt2)) val = normalizedRowMap.get(alt2);
     }
 
-    issueData[dest] = val;
+    if (target === "comment") commentData[dest] = val;
+    else issueData[dest] = val;
   }
 
-  return issueData;
+  return { issueData, commentData };
 }
 
 function splitInspectionFields(issueData) {
@@ -201,22 +221,50 @@ function getDefectInfo(issueData, row) {
   return { defectNumber, defectDescription };
 }
 
-function buildComment(issueData, row, defectNumber) {
-  const address = String(issueData["address"] || row["*Address"] || row["Address"] || "").trim();
-  const observation = String(issueData["observation"] || row["Observation"] || "").trim();
+function buildComment(commentData, issueData, row, defectNumber) {
+  const address = String(commentData["address"] || issueData["address"] || row["*Address"] || row["Address"] || "").trim();
+  const observation = String(commentData["observation"] || issueData["observation"] || row["Observation"] || "").trim();
+
+  const reserved = new Set(["address", "observation", "photo_path"]);
+  const mappedCommentFields = {};
+  for (const [k, v] of Object.entries(commentData || {})) {
+    if (reserved.has(k)) continue;
+    mappedCommentFields[k] = v;
+  }
+
   return {
     id: uuidv4(),
     address,
     text: observation,
     photos: [],
     defect_number: defectNumber,
+    customFields: mappedCommentFields,
+    staticFields: mappedCommentFields,
   };
 }
 
-function getPhotoSourceDir(issueData, row) {
-  const raw = String(issueData["photo_path"] || row["Photo Path"] || row["photo_path"] || "").trim();
+function getPhotoSourceDir(commentData, issueData, row) {
+  const raw = String(commentData["photo_path"] || issueData["photo_path"] || row["Photo Path"] || row["photo_path"] || "").trim();
   if (!raw) return "";
   return resolveInputPath(raw);
+}
+
+
+function getDefectInfo(issueData, row) {
+  const defectText = String(
+    issueData["issue"] || issueData["*Issue"] || row["*Issue"] || row["Issue"] || "",
+  ).trim();
+
+  if (!defectText) return { defectNumber: "", defectDescription: "" };
+
+  const parts = defectText.split(/\s+/);
+  const defectNumber = parts[0] || "";
+  let defectDescription = defectText;
+  if (defectNumber && defectDescription.startsWith(defectNumber)) {
+    defectDescription = defectDescription.slice(defectNumber.length).trim();
+  }
+
+  return { defectNumber, defectDescription };
 }
 
 function createWindow() {
@@ -250,37 +298,36 @@ app.on("window-all-closed", function () {
   if (process.platform !== "darwin") app.quit();
 });
 
-// IPC handlers wiring to sqlite-backed functions
-ipcMain.handle("getAllFields", async () => {
+ipcMain.handle("getAllFields", async (_event, scope = "issue") => {
   try {
-    return fieldsDb.getAllFields();
+    return fieldsDb.getAllFields(scope);
   } catch (err) {
     console.error("[main] getAllFields", err);
     return [];
   }
 });
 
-ipcMain.handle("getStaticFields", async () => {
+ipcMain.handle("getStaticFields", async (_event, scope = "issue") => {
   try {
-    return fieldsDb.getStaticFields();
+    return fieldsDb.getStaticFields(scope);
   } catch (err) {
     console.error("[main] getStaticFields", err);
     return [];
   }
 });
 
-ipcMain.handle("getCustomFields", async () => {
+ipcMain.handle("getCustomFields", async (_event, scope = "issue") => {
   try {
-    return fieldsDb.getCustomFields();
+    return fieldsDb.getCustomFields(scope);
   } catch (err) {
     console.error("[main] getCustomFields", err);
     return [];
   }
 });
 
-ipcMain.handle("addCustomField", async (_event, field) => {
+ipcMain.handle("addCustomField", async (_event, field, scope = "issue") => {
   try {
-    return fieldsDb.addCustomField(field);
+    return fieldsDb.addCustomField(field, scope);
   } catch (err) {
     console.error("[main] addCustomField", err);
     return null;
@@ -447,6 +494,7 @@ ipcMain.handle("previewExcel", async (_event, filePath) => {
 // Accepts optional mapping: { [headerName]: destinationFieldName | "" }
 ipcMain.handle("importExcel", async (_event, projectId, filePath, mapping) => {
   try {
+      console.log("[main] importExcel", { projectId, filePath, mapping });
     if (!filePath || typeof filePath !== "string")
       throw new Error("Invalid file path");
 
@@ -500,21 +548,24 @@ ipcMain.handle("importExcel", async (_event, projectId, filePath, mapping) => {
 
     for (const [i, row] of rows.entries()) {
       try {
-        const issueData = buildIssueDataFromRow(row, mapping);
+        const { issueData, commentData } = buildMappedDataFromRow(row, mapping);
 
-        // if all fields missing, skip
-        const allMissing = Object.values(issueData).every(
+        // if all mapped fields missing, skip
+        const issueMissing = Object.values(issueData).every(
           (v) => v == null || String(v).trim() === "",
         );
-        if (allMissing) continue;
+        const commentMissing = Object.values(commentData).every(
+          (v) => v == null || String(v).trim() === "",
+        );
+        if (issueMissing && commentMissing) continue;
 
-        splitInspectionFields(issueData);
+        if (!issueMissing) splitInspectionFields(issueData);
         const { defectNumber, defectDescription } = getDefectInfo(issueData, row);
-        const comment = buildComment(issueData, row, defectNumber);
+        const comment = buildComment(commentData, issueData, row, defectNumber);
 
         // Process photos from source directory and store Dropbox-relative paths
         try {
-          const sourceDir = getPhotoSourceDir(issueData, row);
+          const sourceDir = getPhotoSourceDir(commentData, issueData, row);
           if (recordId && sourceDir) {
             const files = listImageFilesInDirectory(sourceDir);
             for (const src of files) {
@@ -541,8 +592,10 @@ ipcMain.handle("importExcel", async (_event, projectId, filePath, mapping) => {
           comments.push(updatedComment);
         }
 
-        // Create issue in local DB with project scope and link to record
-        await issuesDb.createIssue(projectId, issueData, recordId || null);
+        // Create issue only from issue-mapped fields
+        if (!issueMissing) {
+          await issuesDb.createIssue(projectId, issueData, recordId || null);
+        }
         summary.imported += 1;
       } catch (err) {
         console.error("[main] importExcel row error", err);
@@ -905,26 +958,3 @@ ipcMain.handle("resolvePhotoPath", async (_event, relPath) => {
       return null
     }
 });
-
-//getPathForFile: (file) => {
-//    try {
-//      if (!file) return null
-//      const p = webUtils.getPathForFile(file)
-//      return p && typeof p === 'string' ? p : null
-//    } catch (err) {
-//      console.error('[preload] getPathForFile error', err)
-//      return null
-//    }
-//  },
-    //
-ipcMain.handle("getPathForFile", async (_event, file) => {
-    try {
-        console.log('[main] getPathForFile called with', file)
-      if (!file) return null
-      const p = webUtils.getPathForFile(file)
-      return p && typeof p === 'string' ? p : null
-    } catch (err) {
-      console.error('[preload] getPathForFile error', err)
-      return null
-    }
-  });

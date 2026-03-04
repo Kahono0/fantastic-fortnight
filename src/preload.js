@@ -8,10 +8,10 @@ const { contextBridge, ipcRenderer, webUtils } = require("electron");
 
 const myappAPI = {
   // Fields
-  getAllFields: () => ipcRenderer.invoke("getAllFields"),
-  getStaticFields: () => ipcRenderer.invoke("getStaticFields"),
-  getCustomFields: () => ipcRenderer.invoke("getCustomFields"),
-  addCustomField: (field) => ipcRenderer.invoke("addCustomField", field),
+    getAllFields: (scope = 'issue') => ipcRenderer.invoke('getAllFields', scope),
+  getStaticFields: (scope = 'issue') => ipcRenderer.invoke('getStaticFields', scope),
+  getCustomFields: (scope = 'issue') => ipcRenderer.invoke('getCustomFields', scope),
+  addCustomField: (field, scope = 'issue') => ipcRenderer.invoke('addCustomField', field, scope),
   deleteField: (id) => ipcRenderer.invoke("deleteField", id),
   saveFieldVisibility: (id, visible) =>
     ipcRenderer.invoke("saveFieldVisibility", id, visible),
