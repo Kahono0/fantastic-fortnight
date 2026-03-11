@@ -187,17 +187,17 @@ try {
     console.error('Error updating field scopes:', err);
 }
 
-try {
-    db.exec(`
-        BEGIN TRANSACTION;
-        DELETE FROM fields WHERE name = 'issue';
-        COMMIT;
-    `);
-} catch (err) {
-    db.exec("ROLLBACK;");
-    console.error('Error deleting old issue field:', err);
-}
-
+//try {
+//    db.exec(`
+//        BEGIN TRANSACTION;
+//        DELETE FROM fields WHERE name = 'issue';
+//        COMMIT;
+//    `);
+//} catch (err) {
+//    db.exec("ROLLBACK;");
+//    console.error('Error deleting old issue field:', err);
+//}
+//
 
 //try {
 //    db.exec(`

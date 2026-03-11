@@ -9,7 +9,6 @@ function parseIssueRow(row) {
   if (!row) return null
   try {
     const obj = JSON.parse(row.data)
-      if (obj.photo_path) delete obj.photo_path
     // ensure id and timestamps are present
     obj.id = row.id
     obj.record_id = row.record_id || null
