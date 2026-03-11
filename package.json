@@ -1,7 +1,7 @@
 {
   "name": "issue-db",
   "productName": "Carney Issue DB",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Manage and track issues efficiently with Carney Issue DB, a desktop application built with Electron.",
   "main": "src/index.js",
   "scripts": {

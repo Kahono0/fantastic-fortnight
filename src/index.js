@@ -1,4 +1,12 @@
-const { app, BrowserWindow, ipcMain, dialog, webUtils } = require("electron");
+const {
+  app,
+  BrowserWindow,
+  ipcMain,
+  dialog,
+  webUtils,
+  Menu,
+  MenuItem,
+} = require("electron");
 const path = require("path");
 const fs = require("fs");
 const xlsx = require("xlsx");
@@ -131,7 +139,8 @@ function ensurePhotoInDropbox(recordId, sourcePath) {
 function buildMappedDataFromRow(row, mapping) {
   const issueData = {};
   const commentData = {};
-  if (!(mapping && typeof mapping === "object")) return { issueData, commentData };
+  if (!(mapping && typeof mapping === "object"))
+    return { issueData, commentData };
 
   const normalizeKey = (s = "") =>
     String(s || "")
@@ -206,7 +215,11 @@ function splitInspectionFields(issueData) {
 
 function getDefectInfo(issueData, row) {
   const defectText = String(
-    issueData["issue"] || issueData["*Issue"] || row["*Issue"] || row["Issue"] || "",
+    issueData["issue"] ||
+      issueData["*Issue"] ||
+      row["*Issue"] ||
+      row["Issue"] ||
+      "",
   ).trim();
 
   if (!defectText) return { defectNumber: "", defectDescription: "" };
@@ -222,8 +235,19 @@ function getDefectInfo(issueData, row) {
 }
 
 function buildComment(commentData, issueData, row, defectNumber) {
-  const address = String(commentData["address"] || issueData["address"] || row["*Address"] || row["Address"] || "").trim();
-  const observation = String(commentData["observation"] || issueData["observation"] || row["Observation"] || "").trim();
+  const address = String(
+    commentData["address"] ||
+      issueData["address"] ||
+      row["*Address"] ||
+      row["Address"] ||
+      "",
+  ).trim();
+  const observation = String(
+    commentData["observation"] ||
+      issueData["observation"] ||
+      row["Observation"] ||
+      "",
+  ).trim();
 
   const reserved = new Set(["address", "observation", "photo_path"]);
   const mappedCommentFields = {};
@@ -244,15 +268,24 @@ function buildComment(commentData, issueData, row, defectNumber) {
 }
 
 function getPhotoSourceDir(commentData, issueData, row) {
-  const raw = String(commentData["photo_path"] || issueData["photo_path"] || row["Photo Path"] || row["photo_path"] || "").trim();
+  const raw = String(
+    commentData["photo_path"] ||
+      issueData["photo_path"] ||
+      row["Photo Path"] ||
+      row["photo_path"] ||
+      "",
+  ).trim();
   if (!raw) return "";
   return resolveInputPath(raw);
 }
 
-
 function getDefectInfo(issueData, row) {
   const defectText = String(
-    issueData["issue"] || issueData["*Issue"] || row["*Issue"] || row["Issue"] || "",
+    issueData["issue"] ||
+      issueData["*Issue"] ||
+      row["*Issue"] ||
+      row["Issue"] ||
+      "",
   ).trim();
 
   if (!defectText) return { defectNumber: "", defectDescription: "" };
@@ -273,6 +306,7 @@ function createWindow() {
     height: 800,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
+      spellcheck: true,
       contextIsolation: true,
       nodeIntegration: false,
     },
@@ -281,6 +315,35 @@ function createWindow() {
 
   // load out/index.html
   win.loadFile(path.join(__dirname, "out", "index.html"));
+
+  win.webContents.on("context-menu", (event, params) => {
+    const menu = new Menu();
+
+    // Add each spelling suggestion
+    for (const suggestion of params.dictionarySuggestions) {
+      menu.append(
+        new MenuItem({
+          label: suggestion,
+          click: () => win.webContents.replaceMisspelling(suggestion),
+        }),
+      );
+    }
+
+    // Allow users to add the misspelled word to the dictionary
+    if (params.misspelledWord) {
+      menu.append(
+        new MenuItem({
+          label: "Add to dictionary",
+          click: () =>
+            win.webContents.session.addWordToSpellCheckerDictionary(
+              params.misspelledWord,
+            ),
+        }),
+      );
+    }
+
+    menu.popup();
+  });
 
   // Open the DevTools.
   //   win.webContents.openDevTools()
@@ -494,7 +557,7 @@ ipcMain.handle("previewExcel", async (_event, filePath) => {
 // Accepts optional mapping: { [headerName]: destinationFieldName | "" }
 ipcMain.handle("importExcel", async (_event, projectId, filePath, mapping) => {
   try {
-      console.log("[main] importExcel", { projectId, filePath, mapping });
+    console.log("[main] importExcel", { projectId, filePath, mapping });
     if (!filePath || typeof filePath !== "string")
       throw new Error("Invalid file path");
 
@@ -560,7 +623,10 @@ ipcMain.handle("importExcel", async (_event, projectId, filePath, mapping) => {
         if (issueMissing && commentMissing) continue;
 
         if (!issueMissing) splitInspectionFields(issueData);
-        const { defectNumber, defectDescription } = getDefectInfo(issueData, row);
+        const { defectNumber, defectDescription } = getDefectInfo(
+          issueData,
+          row,
+        );
         const comment = buildComment(commentData, issueData, row, defectNumber);
 
         // Process photos from source directory and store Dropbox-relative paths
@@ -771,7 +837,6 @@ ipcMain.handle("closeCurrentActiveProject", async () => {
   }
 });
 
-
 // Defects IPC
 ipcMain.handle("getDefects", async (_event, projectId) => {
   try {
@@ -933,28 +998,28 @@ ipcMain.on("getSyncRootSync", (event) => {
 });
 
 ipcMain.handle("resolvePhotoPath", async (_event, relPath) => {
-    try {
-      if (!relPath) return null
-      const raw = String(relPath)
-      if (!raw) return null
+  try {
+    if (!relPath) return null;
+    const raw = String(relPath);
+    if (!raw) return null;
 
-      if (raw.startsWith('file://')) return raw
+    if (raw.startsWith("file://")) return raw;
 
-      const pathMod = path
-      if (pathMod.isAbsolute(raw)) return `file://${raw}`
+    const pathMod = path;
+    if (pathMod.isAbsolute(raw)) return `file://${raw}`;
 
-        const home = app.getPath('home') || ''
-      if (raw.startsWith('Dropbox/')) {
-        const fullDropbox = pathMod.join(home, raw)
-        return `file://${fullDropbox}`
-      }
-
-      const root = ipcRenderer.sendSync('getSyncRootSync')
-      if (!root) return null
-      const full = pathMod.join(root, raw)
-      return `file://${full}`
-    } catch (err) {
-      console.error('[preload] resolvePhotoPath error', err)
-      return null
+    const home = app.getPath("home") || "";
+    if (raw.startsWith("Dropbox/")) {
+      const fullDropbox = pathMod.join(home, raw);
+      return `file://${fullDropbox}`;
     }
+
+    const root = ipcRenderer.sendSync("getSyncRootSync");
+    if (!root) return null;
+    const full = pathMod.join(root, raw);
+    return `file://${full}`;
+  } catch (err) {
+    console.error("[preload] resolvePhotoPath error", err);
+    return null;
+  }
 });
