@@ -7,6 +7,7 @@ function nowISO() {
 
 function rowToField(row) {
   if (!row) return null
+    if (row.name === 'photo_path') return null
   return {
     id: row.id,
     name: row.name,
@@ -26,7 +27,7 @@ function rowToField(row) {
 exports.getAllFields = function (scope = 'issue') {
   const stmt = db.prepare('SELECT * FROM fields WHERE scope = ? ORDER BY static DESC, name ASC')
   const rows = stmt.all(scope)
-  return rows.map(rowToField)
+  return rows.map(rowToField).filter(f => f !== null)
 }
 
 exports.getStaticFields = function (scope = 'issue') {
