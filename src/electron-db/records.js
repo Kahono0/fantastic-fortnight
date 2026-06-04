@@ -113,3 +113,55 @@ exports.deleteRecord = function (projectId, recordId) {
     return false;
   }
 };
+
+exports.renameCommentCustomField = function (oldName, newName) {
+  try {
+    if (!oldName || !newName || oldName === newName) return true
+
+    const rows = db.prepare('SELECT * FROM records').all()
+    const update = db.prepare('UPDATE records SET comments = ?, updated_at = ? WHERE id = ?')
+    const updateMany = db.transaction((items) => {
+      for (const item of items) update.run(item.comments, item.updated_at, item.id)
+    })
+
+    const changed = []
+    for (const row of rows) {
+      let comments
+      try {
+        comments = JSON.parse(row.comments)
+      } catch {
+        comments = []
+      }
+
+      if (!Array.isArray(comments)) continue
+
+      let rowChanged = false
+      const nextComments = comments.map((comment) => {
+        if (!comment || typeof comment !== 'object') return comment
+        const customFields = comment.customFields
+        if (!customFields || typeof customFields !== 'object' || !Object.prototype.hasOwnProperty.call(customFields, oldName)) {
+          return comment
+        }
+
+        const nextCustomFields = { ...customFields }
+        if (!Object.prototype.hasOwnProperty.call(nextCustomFields, newName)) {
+          nextCustomFields[newName] = nextCustomFields[oldName]
+        }
+        delete nextCustomFields[oldName]
+        rowChanged = true
+        return { ...comment, customFields: nextCustomFields }
+      })
+
+      if (rowChanged) {
+        changed.push({ id: row.id, comments: JSON.stringify(nextComments), updated_at: nowISO() })
+      }
+    }
+
+    if (changed.length) updateMany(changed)
+    return true
+  } catch (err) {
+    console.error('[electron-db] renameCommentCustomField error', err)
+    return false
+  }
+}
+

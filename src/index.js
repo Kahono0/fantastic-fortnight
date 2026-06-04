@@ -397,6 +397,15 @@ ipcMain.handle("addCustomField", async (_event, field, scope = "issue") => {
   }
 });
 
+ipcMain.handle("updateCustomField", async (_event, id, updates) => {
+  try {
+    return fieldsDb.updateCustomField(id, updates);
+  } catch (err) {
+    console.error("[main] updateCustomField", err);
+    return null;
+  }
+});
+
 ipcMain.handle("deleteField", async (_event, id) => {
   try {
     return fieldsDb.deleteField(id);

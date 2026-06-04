@@ -280,3 +280,45 @@ exports.deleteIssue = function (issueId) {
   }
 }
 
+
+exports.renameIssueField = function (oldName, newName) {
+  try {
+    if (!oldName || !newName || oldName === newName) return true
+
+    const rows = db.prepare('SELECT * FROM issues').all()
+    const updateIssue = db.prepare('UPDATE issues SET data = ?, updated_at = ? WHERE id = ?')
+    const updateMany = db.transaction((items) => {
+      const updatedAt = nowISO()
+      for (const item of items) updateIssue.run(item.data, updatedAt, item.id)
+    })
+
+    const changed = []
+    for (const row of rows) {
+      let data
+      try {
+        data = JSON.parse(row.data)
+      } catch {
+        data = null
+      }
+
+      if (!data || typeof data !== 'object' || !Object.prototype.hasOwnProperty.call(data, oldName)) continue
+
+      const nextData = { ...data }
+      if (!Object.prototype.hasOwnProperty.call(nextData, newName)) {
+        nextData[newName] = nextData[oldName]
+      }
+      delete nextData[oldName]
+      changed.push({ id: row.id, data: JSON.stringify(nextData), nextData })
+    }
+
+    updateMany(changed)
+    for (const item of changed) {
+      exports.indexIssue(item.id, item.nextData)
+    }
+    return true
+  } catch (err) {
+    console.error('[electron-db] renameIssueField error', err)
+    return false
+  }
+}
+

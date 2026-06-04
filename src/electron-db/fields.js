@@ -1,5 +1,8 @@
 const db = require('./db')
 const { v4: uuidv4 } = require('uuid')
+const issuesDb = require('./issues')
+const recordsDb = require('./records')
+
 
 function nowISO() {
   return new Date().toISOString()
@@ -78,6 +81,66 @@ exports.getCustomFieldById = function (id) {
   const stmt = db.prepare('SELECT * FROM fields WHERE id = ?')
   const row = stmt.get(id)
   return rowToField(row)
+}
+
+exports.updateCustomField = function (id, updates = {}) {
+  try {
+    const current = exports.getCustomFieldById(id)
+    if (!current || current.static) return null
+
+    const nextName = typeof updates.name === 'string' ? updates.name.trim() : current.name
+    const nextLabel = typeof updates.label === 'string' ? updates.label.trim() : current.label
+    const nextType = updates.type || current.type || 'text'
+    const nextRequired = typeof updates.required === 'boolean' ? updates.required : current.required
+    const nextVisible = typeof updates.visible === 'boolean' ? updates.visible : current.visible
+    const nextPlaceholder = typeof updates.placeholder === 'string' && updates.placeholder.trim() ? updates.placeholder.trim() : null
+    const nextOptions = Array.isArray(updates.options)
+      ? updates.options.map((option) => String(option).trim()).filter(Boolean)
+      : (Array.isArray(current.options) ? current.options : undefined)
+
+    if (!nextName) return null
+
+    const duplicate = db.prepare('SELECT id FROM fields WHERE name = ? AND id != ?').get(nextName, id)
+    if (duplicate) return null
+
+    const update = db.prepare(`UPDATE fields
+      SET name = @name,
+          label = @label,
+          type = @type,
+          required = @required,
+          visible = @visible,
+          options = @options,
+          placeholder = @placeholder,
+          updated_at = @updated_at
+      WHERE id = @id AND static = 0`)
+
+    const info = update.run({
+      id,
+      name: nextName,
+      label: nextLabel || nextName,
+      type: nextType,
+      required: nextRequired ? 1 : 0,
+      visible: nextVisible === false ? 0 : 1,
+      options: nextOptions && nextOptions.length ? JSON.stringify(nextOptions) : null,
+      placeholder: nextPlaceholder,
+      updated_at: nowISO(),
+    })
+
+    if (!info.changes) return null
+
+    if (current.name !== nextName) {
+      if (current.scope === 'comment') {
+        recordsDb.renameCommentCustomField(current.name, nextName)
+      } else {
+        issuesDb.renameIssueField(current.name, nextName)
+      }
+    }
+
+    return exports.getCustomFieldById(id)
+  } catch (err) {
+    console.error('[electron-db] updateCustomField error', err)
+    return null
+  }
 }
 
 exports.uploadStaticFieldsToSupabase = function (fieldsData) {

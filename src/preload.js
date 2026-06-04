@@ -12,6 +12,8 @@ const myappAPI = {
   getStaticFields: (scope = 'issue') => ipcRenderer.invoke('getStaticFields', scope),
   getCustomFields: (scope = 'issue') => ipcRenderer.invoke('getCustomFields', scope),
   addCustomField: (field, scope = 'issue') => ipcRenderer.invoke('addCustomField', field, scope),
+    updateCustomField: (id, updates) => ipcRenderer.invoke('updateCustomField', id, updates),
+
   deleteField: (id) => ipcRenderer.invoke("deleteField", id),
   saveFieldVisibility: (id, visible) =>
     ipcRenderer.invoke("saveFieldVisibility", id, visible),
