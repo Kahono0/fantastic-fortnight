@@ -727,7 +727,7 @@ ipcMain.handle("printToPDF", async (event, options) => {
     const pdfOptions = {
       printBackground: true,
       marginsType: 0,
-      pageSize: "A4",
+      pageSize: "Letter",
       scaleFactor: 200,
       landscape: false,
       ...options,
