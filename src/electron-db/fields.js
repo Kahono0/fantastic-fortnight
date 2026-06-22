@@ -10,6 +10,9 @@ function nowISO() {
 
 function rowToField(row) {
   if (!row) return null
+    if (row.scope == "comment" && row.name == "address") {
+      row.visible = 0
+    }
   return {
     id: row.id,
     name: row.name,
