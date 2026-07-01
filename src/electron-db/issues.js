@@ -22,9 +22,9 @@ function parseIssueRow(row) {
   }
 }
 
-exports.getAllIssues = function () {
+exports.getAllIssues = function (projectId) {
   // Use queryIssues with no filters for a consistent path
-  return exports.queryIssues([])
+  return exports.queryIssues(projectId != null ? [{ field: 'project_id', op: 'eq', value: projectId }] : [])
 }
 
 exports.createIssue = function (projectId, issueData, recordIdParam) {
