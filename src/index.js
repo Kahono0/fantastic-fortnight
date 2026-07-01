@@ -656,6 +656,12 @@ ipcMain.handle("importExcel", async (_event, projectId, filePath, mapping) => {
           console.error("[main] importExcel photo handling", err);
         }
 
+           let inspectionId = null;
+        // Create issue only from issue-mapped fields
+        if (!issueMissing) {
+          const inspection = await issuesDb.createIssue(projectId, issueData, recordId || null);
+          inspectionId = inspection?.id ?? inspection;
+        }
         if (defectNumber) {
           //if (!defectMap.has(defectNumber)) defectMap.set(defectNumber, defectDescription)
           const savedDefect = defectsDb.saveDefect(projectId, {
@@ -663,14 +669,10 @@ ipcMain.handle("importExcel", async (_event, projectId, filePath, mapping) => {
             description: defectDescription,
           });
 
-          const updatedComment = { ...comment, issueId: savedDefect.id };
+          const updatedComment = { ...comment, issueId: savedDefect.id, inspectionId: inspectionId || undefined };
           comments.push(updatedComment);
         }
 
-        // Create issue only from issue-mapped fields
-        if (!issueMissing) {
-          await issuesDb.createIssue(projectId, issueData, recordId || null);
-        }
         summary.imported += 1;
       } catch (err) {
         console.error("[main] importExcel row error", err);
